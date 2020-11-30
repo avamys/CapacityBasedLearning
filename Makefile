@@ -8,7 +8,13 @@ PROJECT_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 BUCKET = [OPTIONAL] your-bucket-for-syncing-data (do not include 's3://')
 PROFILE = default
 PROJECT_NAME = CapacityBasedLearning
-PYTHON_INTERPRETER = python3
+PYTHON_INTERPRETER = python
+UCI_DATA_URL_OBESITY = "https://archive.ics.uci.edu/ml/machine-learning-databases/00544/ObesityDataSet_raw_and_data_sinthetic%20(2).zip"
+UCI_DATA_URL_MICE = https://archive.ics.uci.edu/ml/machine-learning-databases/00342/Data_Cortex_Nuclear.xls
+UCI_DATA_URL_DRUGS = https://archive.ics.uci.edu/ml/machine-learning-databases/00373/drug_consumption.data
+UCI_DATA_URL_CARS = https://archive.ics.uci.edu/ml/machine-learning-databases/car/car.data
+UCI_DATA_URL_ADULT = https://archive.ics.uci.edu/ml/machine-learning-databases/adult/adult.data
+UCI_DATA_URL_ANNEALING = https://archive.ics.uci.edu/ml/machine-learning-databases/annealing/anneal.data
 
 ifeq (,$(shell which conda))
 HAS_CONDA=False
@@ -27,7 +33,35 @@ requirements: test_environment
 
 ## Make Dataset
 data: requirements
-	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw data/processed
+	@echo ">>> Downloading data from UCI."
+	curl -o data/raw/obesity.zip $(UCI_DATA_URL_OBESITY)
+	unzip data/raw/obesity.zip -d data/raw/
+	find data/raw/ -type f ! -iname "*.csv" -delete
+	mv data/raw/* data/raw/obesity.csv
+	curl -o data/raw/mice.xls $(UCI_DATA_URL_MICE)
+	curl -o data/raw/adult.data $(UCI_DATA_URL_ADULT)
+	curl -o data/raw/anneal.data $(UCI_DATA_URL_ANNEALING)
+	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/adult.data data/processed/
+	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/obesity.csv data/processed/
+	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/mice.xls data/processed/
+	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/anneal.data data/processed/
+
+## Data preprocessing
+preprocessing: 
+	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/adult.data data/processed/
+	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/obesity.csv data/processed/
+	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/mice.xls data/processed/
+	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/anneal.data data/processed/
+	
+## Train Model
+train:
+	@echo ">>> Training model"
+	$(PYTHON_INTERPRETER) src/models/train_model.py data/processed/adult_features.csv data/processed/adult_target.csv
+
+## Run tests
+run_tests:
+	@echo ">>> Running unit tests"
+	$(PYTHON_INTERPRETER) -m unittest discover tests
 
 ## Delete all compiled Python files
 clean:

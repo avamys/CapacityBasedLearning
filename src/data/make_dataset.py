@@ -3,6 +3,7 @@ import click
 import logging
 from pathlib import Path
 from dotenv import find_dotenv, load_dotenv
+from preprocessing import DataPreprocessor
 
 
 @click.command()
@@ -13,7 +14,17 @@ def main(input_filepath, output_filepath):
         cleaned data ready to be analyzed (saved in ../processed).
     """
     logger = logging.getLogger(__name__)
-    logger.info('making final data set from raw data')
+    logger.info('making final data sets from raw data')
+    preprocessor = DataPreprocessor()
+
+    logger.info('reading data file')
+    preprocessor.read_data(input_filepath)
+
+    logger.info('processing data')
+    preprocessor.preprocess_data()
+
+    logger.info('saving processed data')
+    preprocessor.write_data(output_filepath)
 
 
 if __name__ == '__main__':
