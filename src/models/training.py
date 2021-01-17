@@ -55,11 +55,9 @@ def validation_step(model, criterion, features, target):
 def train(model, criterion, optimizer, epochs, features, target, features_val, target_val, writer):
     ''' Performs full training of a specified model in specified number of epochs '''
 
-    training_bar = tqdm(range(epochs))
-
     losses_train, losses_validate = [], []
     
-    for epoch in training_bar:
+    for epoch in tqdm(range(epochs)):
         loss_train = training_step(model, criterion, optimizer, features, target)
         losses_train.append(loss_train)
         writer.add_scalar("Loss/train", loss_train, epoch)
@@ -74,4 +72,4 @@ def train(model, criterion, optimizer, epochs, features, target, features_val, t
 def save_model(model: Model, name: str):
     ''' Saves model with a given name to a proper folder '''
 
-    torch.save(model.state_dict(), 'models/'+name)
+    torch.save(model.state_dict(), f'models/{name}')
