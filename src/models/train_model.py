@@ -3,9 +3,11 @@ import torch
 import torch.nn as nn
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
+from ray import tune
 
 from network import Model
 from training import *
+from src.models.config import Configurator
 
 import click
 import logging
@@ -33,16 +35,28 @@ def main(input_features, input_target):
     X_train, X_test, y_train, y_test = data_split(X, y)
 
     logger.info('running')
-    # Set up network and training parameters
-    model = Model(X_train.shape[1], len(np.unique(y_train)), (100, 240, 10), 'relu', 'softmax')
-    writer.add_graph(model, X_train)
-    trained_model = train(model, nn.CrossEntropyLoss(), Adam(model.parameters(), lr=0.01),
-                          300, X_train, y_train, X_test, y_test, writer)
-    
+
+    # Config dict for running experiment
+    config = {
+        "layers": [
+            tune.grid_search([10,32,64]),
+            tune.grid_search([10,32,64])
+        ],
+        "activation": 'relu',
+        "window_size": tune.grid_search([3,5]),
+        "threshold": 0.01,
+        "optim_lr": 0.01
+    }
+
+    trainer = Configurator(config, nn.CrossEntropyLoss(), 50, X_train, y_train, X_test, y_test)
+    analysis = trainer.run()
+
+    print("Best config: ",analysis.get_best_config(metric="accuracy", mode="max"))
+
     writer.close()
 
-    logger.info('saving trained model')
-    save_model(trained_model, 'model1.pth')
+    # logger.info('saving trained model')
+    # save_model(trained_model, 'model1.pth')
 
 
 if __name__ == '__main__':

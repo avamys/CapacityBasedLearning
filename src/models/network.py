@@ -39,20 +39,24 @@ class Model(nn.Module):
 
 class NeuronBud(nn.Module):
     ''' Static Bud model with two 3x3 hidden layers and given output size '''
-    def __init__(self, size_out: int, activation_name: str):
+    def __init__(self, size_in: int, size_out: int, layers: List[int], 
+                 activation_name: str, activation_out: str):
         super().__init__()
 
-        self.activation_method = get_activation(activation_name)
-        self.weight = torch.ones(1, 3) * 1/3
+        self.weight = torch.ones(1, size_in) * 1/size_in
+        activation_method = get_activation(activation_name)
+        activation_out = get_activation(activation_out)
+        layerlist = []
+        n_in = size_in
 
-        self.layers = nn.Sequential(
-            nn.Linear(3, 3),
-            self.activation_method(),
-            nn.Linear(3, 3),
-            self.activation_method(),
-            nn.Linear(3, size_out),
-            self.activation_method()
-        )
+        for layer in layers:
+            layerlist.append(nn.Linear(n_in, layer))
+            layerlist.append(activation_method())
+            n_in = layer
+        layerlist.append(nn.Linear(layers[-1], size_out))
+        layerlist.append(activation_out())
+
+        self.layers = nn.Sequential(*layerlist)
 
     def forward(self, x):
         x = (self.weight * x)
@@ -137,7 +141,7 @@ class BuddingLayer(nn.Module):
                     u_buds = [int(key) for key in self.buds.keys()]
                     
                     for new_bud in list(set(u_neurons) - set(u_buds)):
-                        self.buds[str(new_bud)] = NeuronBud(self.size_out, 'relu') # To parametrize
+                        self.buds[str(new_bud)] = NeuronBud(3, self.size_out, (3,3), 'relu', 'relu')
 
                     self.saturated_neurons = sat
 
@@ -152,3 +156,36 @@ class BuddingLayer(nn.Module):
         x = F.linear(x, self.weight, self.bias)
 
         return x + u, best_lipschitz_constant
+
+class CapacityModel(nn.Module):
+    def __init__(self, size_in: int, size_out: int, window_size: int, 
+                 threshold: float, layers: List[int],
+                 activation_name: str):
+        
+        super().__init__()
+
+        self.window_size = window_size
+        self.threshold = threshold
+
+        self.activation = get_activation(activation_name)()
+        n_in = size_in
+        self.layerlist = nn.ModuleList()
+
+        for layer in layers:
+            self.layerlist.append(BuddingLayer(n_in, layer, window_size))
+            n_in = layer
+        self.layerlist.append(BuddingLayer(layers[-1], size_out, window_size))
+
+    def get_saturation(self, best_lipschitz):
+        if best_lipschitz is not None:
+            return best_lipschitz < self.threshold
+        return None
+
+    def forward(self, x):
+        x, lip = self.layerlist[0](x)
+        for i, l in enumerate(self.layerlist[1:]):
+            x = self.activation(x)
+            saturation = self.get_saturation(lip)
+            x, lip = self.layerlist[i+1](x, saturation)
+
+        return x
