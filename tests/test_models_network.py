@@ -14,10 +14,11 @@ class TestBuddingLayer(unittest.TestCase):
 
         self.x = torch.tensor([[0.1, 0.1], [1.0, 1.0]])
         self.saturated = torch.BoolTensor([False, True])
+        self.optim = torch.optim.Adam(self.bud.parameters(), 0.001)
 
     def test_buds_creation(self):
         self.assertEqual(len(self.bud.buds), 0)
-        y, lip = self.bud(self.x, self.saturated)
+        y, lip = self.bud(self.x, self.saturated, self.optim)
 
         self.assertEqual(len(self.bud.buds), 1)
         self.assertEqual(list(self.bud.buds.keys())[0], '1')
@@ -35,9 +36,9 @@ class TestBuddingLayer(unittest.TestCase):
         self.assertTrue(torch.equal(y, expected_y))
 
     def test_forward_with_bud(self):
-        y, lip = self.bud.forward(self.x, self.saturated)
+        y, lip = self.bud.forward(self.x, self.saturated, self.optim)
 
-        u = self.bud.buds['1'](self.x[:, 1].view(-1, 1))
+        u = self.bud.buds['1'](self.x[:, 1].view(-1, 1), self.optim)
         zero_x = self.x * (~self.saturated).float()
         self.assertTrue(torch.equal(zero_x, torch.tensor([[0.1, 0], [1.0, 0]])))
 
@@ -51,13 +52,13 @@ class TestBuddingLayer(unittest.TestCase):
         model.weight = nn.Parameter(torch.ones((2,2)))
         self.assertEqual(len(model.weights_window), 0)
 
-        y, lip = model.forward(self.x, self.saturated)
+        y, lip = model.forward(self.x, self.saturated, self.optim)
         self.assertEqual(len(model.weights_window), 1)
 
         model.weight = nn.Parameter(torch.ones((2,2)) * 2)
         self.assertIsNot(model.weights_window[0], model.state_dict()['weight'])
 
-        y, lip = model.forward(self.x, self.saturated)
+        y, lip = model.forward(self.x, self.saturated, self.optim)
         self.assertEqual(len(model.weights_window), 2)
         self.assertIsNot(model.weights_window[0], model.weights_window[1])
 
@@ -65,10 +66,10 @@ class TestBuddingLayer(unittest.TestCase):
         lip = self.bud.get_lipschitz_constant()
         self.assertIsNone(lip)
 
-        y, lip = self.bud.forward(self.x, self.saturated)
+        y, lip = self.bud.forward(self.x, self.saturated, self.optim)
         self.bud.weight = nn.Parameter(torch.ones((2,2)) * 2)
 
-        y, lip = self.bud.forward(self.x, self.saturated)
+        y, lip = self.bud.forward(self.x, self.saturated, self.optim)
 
         self.assertEqual(len(self.bud.lipshitz_constants), 1)
         self.assertTrue(torch.equal(lip, torch.tensor([2.0, 2.0])))

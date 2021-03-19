@@ -48,7 +48,7 @@ def main(input_features, input_target):
         "optim_lr": 0.01
     }
 
-    trainer = Configurator(config, nn.CrossEntropyLoss(), 50, X_train, y_train, X_test, y_test)
+    trainer = Configurator(config, nn.CrossEntropyLoss(), 10, X_train, y_train, X_test, y_test)
     analysis = trainer.run()
 
     print("Best config: ",analysis.get_best_config(metric="accuracy", mode="max"))
