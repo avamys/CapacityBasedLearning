@@ -1,0 +1,15 @@
+name: exp-test
+
+parameters:
+# Data preparation
+  test_size: 0.3
+
+# Model parameters
+  layers: [
+    10,
+    10
+  ]
+  activation: 'relu'
+  window_size: 5
+  threshold: 0.01
+  optim_lr: 0.01

@@ -9,6 +9,7 @@ from network import Model
 from training import *
 from src.models.config import Configurator
 
+import yaml
 import click
 import logging
 from pathlib import Path
@@ -18,7 +19,8 @@ from dotenv import find_dotenv, load_dotenv
 @click.command()
 @click.argument('input_features', type=click.File('rb'))
 @click.argument('input_target', type=click.File('rb'))
-def main(input_features, input_target):
+@click.argument('config_file', type=click.Path())
+def main(input_features, input_target, config_file):
     """ Runs model training scripts to create and train models on prepared
         datasets (from ../processed) and save them in ../models.
     """
@@ -26,8 +28,6 @@ def main(input_features, input_target):
     
     # Get reproducible results
     torch.manual_seed(42)
-
-    writer = SummaryWriter()
 
     logger.info('loading data')
     X = np.genfromtxt(input_features, delimiter=',')
@@ -37,23 +37,13 @@ def main(input_features, input_target):
     logger.info('running')
 
     # Config dict for running experiment
-    config = {
-        "layers": [
-            tune.grid_search([10,32,64]),
-            tune.grid_search([10,32,64])
-        ],
-        "activation": 'relu',
-        "window_size": tune.grid_search([3,5]),
-        "threshold": 0.01,
-        "optim_lr": 0.01
-    }
+    with open(config_file) as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
 
     trainer = Configurator(config, nn.CrossEntropyLoss(), 10, X_train, y_train, X_test, y_test)
     analysis = trainer.run()
 
     print("Best config: ",analysis.get_best_config(metric="accuracy", mode="max"))
-
-    writer.close()
 
     # logger.info('saving trained model')
     # save_model(trained_model, 'model1.pth')

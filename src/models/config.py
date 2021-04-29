@@ -2,7 +2,9 @@ import os
 import numpy as np
 import torch
 import ray
+
 from ray import tune
+from torch.utils.tensorboard import SummaryWriter
 
 from src.models.network import Model, CapacityModel
 from src.models.training import training_step, validation_step
@@ -19,8 +21,13 @@ class Configurator():
         self.features_val = features_val
         self.target_val = target_val
 
+        self.name = self.config['name']
+        self.parameters = self.config['parameters']
+
     def train(self, config, checkpoint_dir=None):
         ''' Performs full training of a specified model in specified number of epochs '''
+
+        writer = SummaryWriter(log_dir="custom_logs")
 
         losses_train, losses_validate = [], []
 
@@ -33,8 +40,9 @@ class Configurator():
             activation_name=config['activation']
         )
 
+        writer.add_graph(model, self.features)
+
         optimizer = torch.optim.Adam(model.parameters(), lr=config['optim_lr'])
-        
         for epoch in range(self.epochs):
             loss_train = training_step(model, self.criterion, optimizer, self.features, self.target)
             losses_train.append(loss_train)
@@ -44,6 +52,8 @@ class Configurator():
 
             tune.report(loss_train=loss_train, loss_val=loss_validate, accuracy=accuracy)
 
+        writer.close()
+
     def run(self):
-        result = tune.run(self.train, config=self.config, name="Capacity2", verbose=3, local_dir='runs')
+        result = tune.run(self.train, config=self.parameters, name=self.name, verbose=3, local_dir='runs')
         return result
