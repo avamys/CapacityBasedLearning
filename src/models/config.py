@@ -8,6 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from src.models.network import Model, CapacityModel
 from src.models.training import training_step, validation_step
+from src.visualization.visualize import TBLogger
 
 
 class Configurator():
@@ -28,6 +29,7 @@ class Configurator():
         ''' Performs full training of a specified model in specified number of epochs '''
 
         writer = SummaryWriter(log_dir="custom_logs")
+        logger = TBLogger(writer)
 
         losses_train, losses_validate = [], []
 
@@ -44,9 +46,15 @@ class Configurator():
 
         optimizer = torch.optim.Adam(model.parameters(), lr=config['optim_lr'])
         for epoch in range(self.epochs):
-            loss_train = training_step(model, self.criterion, optimizer, self.features, self.target)
+
+            # Training step
+            loss_train = training_step(model, self.criterion, optimizer, self.features, self.target, forward_optim=True)
             losses_train.append(loss_train)
 
+            # Logging
+            logger.log_model_params(model, epoch)
+
+            # Validation step
             loss_validate, accuracy = validation_step(model, self.criterion, self.features_val, self.target_val)
             losses_validate.append(loss_validate)
 
