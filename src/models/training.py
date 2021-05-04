@@ -27,11 +27,16 @@ def calculate_accuracy(target_predicted: torch.Tensor, target: torch.Tensor) -> 
     return accuracy
 
 
-def training_step(model, criterion, optimizer, features, target):
+def training_step(model, criterion, optimizer, features, target, forward_optim: bool = False):
     ''' Performs single training step and returns loss '''
 
     model.train()
-    target_pred = model.forward(features)
+
+    if forward_optim:
+        target_pred = model.forward(features, optimizer)
+    else:
+        target_pred = model.forward(features)
+        
     loss = criterion(target_pred, target)
 
     optimizer.zero_grad()

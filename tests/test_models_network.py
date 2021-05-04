@@ -37,6 +37,7 @@ class TestBuddingLayer(unittest.TestCase):
 
     def test_forward_with_bud(self):
         y, lip = self.bud.forward(self.x, self.saturated, self.optim)
+        self.bud.eval()
 
         u = self.bud.buds['1'](self.x[:, 1].view(-1, 1), self.optim)
         zero_x = self.x * (~self.saturated).float()
@@ -74,6 +75,25 @@ class TestBuddingLayer(unittest.TestCase):
         self.assertEqual(len(self.bud.lipshitz_constants), 1)
         self.assertTrue(torch.equal(lip, torch.tensor([2.0, 2.0])))
 
+class TestNeuronBud(unittest.TestCase):
+    def setUp(self):
+        self.model = NeuronBud(2, 2, 1, 0.01, [2,2], 'tanh', 'tanh')
+
+    def test_init(self):
+        self.assertEqual(len(self.model.layerlist), 3)
+        
+        expected_weight = torch.tensor([0.5, 0.5]).view(1, -1)
+        self.assertTrue(torch.equal(self.model.weight, expected_weight))
+
+    def test_best_lipschitz(self):
+        lipschitz = None
+        saturation = self.model.get_saturation(lipschitz)
+        self.assertIs(saturation, None)
+
+        lipschitz = torch.tensor([1, 1, 0.01, 0.001])
+        expected = torch.tensor([False, False, False, True])
+        saturation = self.model.get_saturation(lipschitz)
+        self.assertTrue(torch.equal(expected, saturation))
 
 if __name__ == '__main__':
     unittest.main()

@@ -65,32 +65,52 @@ class LinearBud(nn.Module):
 
 class NeuronBud(nn.Module):
     ''' Parametrized Bud model '''
+    counter = 0
     def __init__(self, size_in: int, size_out: int, window_size: int, 
                  threshold: float, layers: List[int],
-                 activation_name: str, activation_out: str):
+                 activation_name: str, activation_out: str, level: int = 0, parent: int = 0):
         super().__init__()
 
         self.window_size = window_size
         self.threshold = threshold
         self.activation = get_activation(activation_name)()
         self.activation_out = get_activation(activation_out)()
+        
+        self.level = level + 1
+        self.parent_id = parent
+        self.id = NeuronBud.counter
+        NeuronBud.counter += 1
 
         self.weight = torch.ones(1, size_in) * 1/size_in
         n_in = size_in
 
         self.layerlist = nn.ModuleList()
 
-        for layer in layers:
-            self.layerlist.append(BuddingLayer(n_in, layer, window_size))
+        for layer_id, layer in enumerate(layers):
+            self.layerlist.append(BuddingLayer(n_in, layer, window_size, level=self.level, idx=layer_id))
             n_in = layer
-        self.layerlist.append(BuddingLayer(layers[-1], size_out, window_size))
+        self.layerlist.append(BuddingLayer(layers[-1], size_out, window_size, level=self.level, idx=len(layers)-1))
 
     def get_saturation(self, best_lipschitz):
         if best_lipschitz is not None:
             return best_lipschitz < self.threshold
         return None
 
-    def forward(self, x, optim):
+    def get_n_buds(self):
+        ''' Aggregate parameters of every layer '''
+        n_buds = 0
+        lipschitz_consts = dict()
+        for idx, layer in enumerate(self.layerlist):
+            n_buds += len(layer.buds)
+            lips = layer.get_lipschitz_constant()
+            if lips is not None:
+                keys = [str(i) for i in range(lips.shape[0])]
+                lipschitz_consts[f'lipschitz_{self.level}_{self.parent_id}_{self.id}_{idx}'] = dict(zip(keys, lips))
+            lipschitz_consts.update(layer.lower_lipschitz)
+
+        return n_buds, lipschitz_consts
+
+    def forward(self, x, optim=None):
         # Distribution of input weights to the first layer
         x = (self.weight * x)
 
@@ -109,7 +129,7 @@ class BuddingLayer(nn.Module):
         neurons.
     '''
     def __init__(self, size_in: int, size_out: int, window_size: int, 
-                 compute_lipschitz: bool = True, bias: bool = True):
+                 compute_lipschitz: bool = True, bias: bool = True, level: int = 0, idx: int = 0):
         super().__init__()
 
         self.window_size = window_size
@@ -123,6 +143,12 @@ class BuddingLayer(nn.Module):
         self.size_in = size_in
         self.size_out = size_out
         self.buds = nn.ModuleDict()
+        
+        self.level = level
+        self.id = idx
+        self.n_buds = 0
+        self.lower_lipschitz = dict()
+
         self.weight = nn.Parameter(Tensor(size_out, size_in))
         if bias:
             self.bias = nn.Parameter(Tensor(size_out))
@@ -151,7 +177,7 @@ class BuddingLayer(nn.Module):
         current_weights = self.state_dict()['weight']
 
         for epoch_id, cached_weights in enumerate(self.weights_window):
-            dist_func = torch.abs(torch.sum(cached_weights, dim=1) - torch.sum(current_weights, dim=1))
+            dist_func = torch.abs(torch.sum(cached_weights - current_weights, dim=1))
             dist_points = self.window_size - epoch_id
 
             self.lipshitz_constants.append(dist_func / dist_points)
@@ -165,18 +191,33 @@ class BuddingLayer(nn.Module):
             return torch.max(torch.stack(list(self.lipshitz_constants), dim=1), dim=1)[0]
         return None
 
+    def get_n_buds(self):
+        ''' Sum up number of buds grown in lower levels '''
+        sum_buds = 0
+        for key in self.buds:
+            lower_n_buds, buds_lipschitz = self.buds[key].get_n_buds()
+            sum_buds += lower_n_buds
+            self.lower_lipschitz.update(buds_lipschitz)
+
+        self.n_buds = sum_buds
+
     def forward(self, x: Tensor, saturated: Tensor = None, optim=None) -> Tuple:
         ''' saturated tensor should be provided from the previous layer
 
         '''
-        self.__update_lipschitz_cache() # update lipschitz deque with current weights
-        self.__update_cache() # update weights deque with current weights
+        if self.training:
+            self.__update_lipschitz_cache() # update lipschitz deque with current weights
+            self.__update_cache() # update weights deque with current weights
 
         best_lipschitz_constant = self.get_lipschitz_constant() 
         u = 0
 
         if saturated is not None:
-            sat = torch.logical_or(self.saturated_neurons, saturated)
+            if self.training:
+                sat = torch.logical_or(self.saturated_neurons, saturated)
+            else:
+                # Growing buds is not allowed in evaluation mode
+                sat = self.saturated_neurons
 
             if sat.any().item() > 0:
                 # Add new NeuronBuds if the number of buds has changed
@@ -185,7 +226,16 @@ class BuddingLayer(nn.Module):
                     u_buds = [int(key) for key in self.buds.keys()]
                     
                     for new_bud in list(set(u_neurons) - set(u_buds)):
-                        self.buds[str(new_bud)] = NeuronBud(3, self.size_out, self.window_size+1, 0.001, (3,3), 'tanh', 'tanh')
+                        self.buds[str(new_bud)] = NeuronBud(
+                            size_in=3,
+                            size_out=self.size_out, 
+                            window_size=self.window_size,
+                            threshold=0.001, 
+                            layers=(3,3), 
+                            activation_name='tanh', 
+                            activation_out='tanh', 
+                            level=self.level,
+                            parent=self.id)
                         
                         # Add new parameters to optimizer
                         if optim is not None:
@@ -200,6 +250,8 @@ class BuddingLayer(nn.Module):
 
                 # Apply linear transformation for non-saturated neurons
                 x = x * (~self.saturated_neurons).float()
+
+            self.get_n_buds()
             
         x = F.linear(x, self.weight, self.bias)
 
@@ -229,6 +281,19 @@ class CapacityModel(nn.Module):
         if best_lipschitz is not None:
             return best_lipschitz < self.threshold
         return None
+
+    def get_n_buds(self):
+        ''' Aggregate all information from lower levels' layers and buds
+            (Used for logging)
+        '''
+        n_buds_core = 0
+        n_buds_layers = 0
+        lower_lipschitz = dict()
+        for layer in self.layerlist:
+            n_buds_core += len(layer.buds)
+            n_buds_layers += layer.n_buds
+            lower_lipschitz.update(layer.lower_lipschitz)
+        return n_buds_core + n_buds_layers, lower_lipschitz
 
     def forward(self, x, optim=None):
         x, lip = self.layerlist[0].forward(x, optim=optim)
