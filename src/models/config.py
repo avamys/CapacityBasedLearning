@@ -13,6 +13,7 @@ from typing import Dict, List, Union, Callable, Optional
 from src.models.network import Model, CapacityModel
 from src.models.training import training_step, validation_step
 from src.visualization.visualize import TBLogger
+from src.models.utils import get_optimizer
 
 
 LossFunction = Callable[[Tensor, Tensor], Tensor]
@@ -54,7 +55,8 @@ class Configurator():
 
         writer.add_graph(model, self.features)
 
-        optimizer = torch.optim.Adam(model.parameters(), lr=config['optim_lr'])
+        optimizer = get_optimizer(config['optimizer'])(model.parameters(), lr=config['learning_rate'])
+
         for epoch in range(self.epochs):
 
             # Training step
