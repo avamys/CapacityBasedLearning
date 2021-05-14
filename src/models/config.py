@@ -4,15 +4,24 @@ import torch
 import ray
 
 from ray import tune
+from ray.tune.analysis import ExperimentAnalysis
 from torch.utils.tensorboard import SummaryWriter
+from torch import Tensor
+
+from typing import Dict, List, Union, Callable, Optional
 
 from src.models.network import Model, CapacityModel
 from src.models.training import training_step, validation_step
 from src.visualization.visualize import TBLogger
 
 
+LossFunction = Callable[[Tensor, Tensor], Tensor]
+Config = Dict[str, Union[int, float, str, List[int]]]
+
 class Configurator():
-    def __init__(self, config, criterion, epochs, features, target, features_val, target_val):
+    def __init__(self, config: Config, criterion: LossFunction, epochs: int,
+                 features: Tensor, target: Tensor, features_val: Tensor, 
+                 target_val: Tensor) -> None:
         self.config = config
         self.criterion = criterion
         self.epochs = epochs
@@ -24,8 +33,9 @@ class Configurator():
 
         self.name = self.config['name']
         self.parameters = self.config['parameters']
+        self.local_dir = self.config['dir']
 
-    def train(self, config, checkpoint_dir=None):
+    def train(self, config: Config, checkpoint_dir: Optional[str] = None) -> None:
         ''' Performs full training of a specified model in specified number of epochs '''
 
         writer = SummaryWriter(log_dir="custom_logs")
@@ -62,6 +72,6 @@ class Configurator():
 
         writer.close()
 
-    def run(self):
-        result = tune.run(self.train, config=self.parameters, name=self.name, verbose=3, local_dir='runs')
+    def run(self) -> ExperimentAnalysis:
+        result = tune.run(self.train, config=self.parameters, name=self.name, verbose=3, local_dir=self.local_dir)
         return result
