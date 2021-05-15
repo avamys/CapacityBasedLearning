@@ -7,9 +7,11 @@ import torch.nn.init as init
 from torch import Tensor
 
 from src.models.utils import get_activation
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Union
 from collections import deque
 from scipy.special import binom
+
+Config = Dict[str, Union[int, float, str, List[int]]]
 
 class Model(nn.Module):
     ''' Simple parametrized network '''
@@ -66,30 +68,43 @@ class LinearBud(nn.Module):
 class NeuronBud(nn.Module):
     ''' Parametrized Bud model with budding layers '''
     counter = 0
-    def __init__(self, size_in: int, size_out: int, window_size: int, 
-                 threshold: float, layers: List[int],
-                 activation_name: str, activation_out: str, level: int = 0, parent: int = 0):
+    def __init__(self, size_out: int, window_size: int, params: Config, level: int = 0, parent: int = 0):
         super().__init__()
 
         self.window_size = window_size
-        self.threshold = threshold
-        self.activation = get_activation(activation_name)()
-        self.activation_out = get_activation(activation_out)()
-        
+        self.size_in = params['size_in']
+        self.threshold = params['threshold']
+        self.activation = get_activation(params['activation'])()
+        self.layers = params['layers']
+
         self.level = level + 1
         self.parent_id = parent
         self.id = NeuronBud.counter
         NeuronBud.counter += 1
 
-        self.weight = torch.ones(1, size_in) * 1/size_in
-        n_in = size_in
+        self.weight = torch.ones(1, self.size_in) / self.size_in
+        n_in = self.size_in
 
         self.layerlist = nn.ModuleList()
 
-        for layer_id, layer in enumerate(layers):
-            self.layerlist.append(BuddingLayer(n_in, layer, window_size, level=self.level, idx=layer_id))
+        # Create feedforward network with budding layers
+        for layer_id, layer in enumerate(self.layers):
+            self.layerlist.append(BuddingLayer(
+                size_in=n_in,
+                size_out=layer,
+                window_size=window_size,
+                buds_params=params, 
+                level=self.level, 
+                idx=layer_id))
             n_in = layer
-        self.layerlist.append(BuddingLayer(layers[-1], size_out, window_size, level=self.level, idx=len(layers)))
+
+        self.layerlist.append(BuddingLayer(
+            size_in=self.layers[-1],
+            size_out=size_out,
+            window_size=window_size,
+            buds_params=params, 
+            level=self.level, 
+            idx=len(self.layers)))
 
     def get_saturation(self, best_lipschitz):
         if best_lipschitz is not None:
@@ -129,7 +144,7 @@ class BuddingLayer(nn.Module):
     ''' Budding layer that stores and activates the buds for saturated 
         neurons.
     '''
-    def __init__(self, size_in: int, size_out: int, window_size: int, 
+    def __init__(self, size_in: int, size_out: int, window_size: int, buds_params: Config, 
                  compute_lipschitz: bool = True, bias: bool = True, level: int = 0, idx: int = 0):
         super().__init__()
 
@@ -139,7 +154,7 @@ class BuddingLayer(nn.Module):
         self.lipshitz_constants = deque(maxlen=self.lipschitz_size)
         self.saturated_neurons = torch.zeros(size_in, dtype=torch.bool)
 
-        self.buds_optims = []
+        self.buds_params = buds_params
         
         self.size_in = size_in
         self.size_out = size_out
@@ -225,13 +240,9 @@ class BuddingLayer(nn.Module):
                     
                     for new_bud in list(set(u_neurons) - set(u_buds)):
                         self.buds[str(new_bud)] = NeuronBud(
-                            size_in=3,
                             size_out=self.size_out, 
                             window_size=self.window_size,
-                            threshold=0.0001, 
-                            layers=(3,3), 
-                            activation_name='relu', 
-                            activation_out='relu', 
+                            params=self.buds_params,
                             level=self.level,
                             parent=self.id)
                         
@@ -259,7 +270,7 @@ class BuddingLayer(nn.Module):
 class CapacityModel(nn.Module):
     def __init__(self, size_in: int, size_out: int, window_size: int, 
                  threshold: float, layers: List[int],
-                 activation_name: str):
+                 activation_name: str, buds_params: Config):
         
         super().__init__()
 
@@ -271,9 +282,9 @@ class CapacityModel(nn.Module):
         self.layerlist = nn.ModuleList()
 
         for layer_id, layer in enumerate(layers):
-            self.layerlist.append(BuddingLayer(n_in, layer, window_size, idx=layer_id))
+            self.layerlist.append(BuddingLayer(n_in, layer, window_size, buds_params, idx=layer_id))
             n_in = layer
-        self.layerlist.append(BuddingLayer(layers[-1], size_out, window_size, idx=len(layers)))
+        self.layerlist.append(BuddingLayer(layers[-1], size_out, window_size, buds_params, idx=len(layers)))
 
     def get_saturation(self, best_lipschitz):
         if best_lipschitz is not None:

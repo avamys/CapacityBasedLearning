@@ -18,3 +18,10 @@ parameters:
   activation: 'relu'
   window_size: 5
   threshold: 0.001
+
+# Buds parameters
+  buds_parameters:
+    size_in: 3
+    threshold: 0.001
+    layers: [3, 3]
+    activation: 'relu'

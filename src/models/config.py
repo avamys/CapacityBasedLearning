@@ -50,7 +50,8 @@ class Configurator():
             window_size=config['window_size'], 
             threshold=config['threshold'], 
             layers=config['layers'], 
-            activation_name=config['activation']
+            activation_name=config['activation'],
+            buds_params=config['buds_parameters']
         )
 
         writer.add_graph(model, self.features)
