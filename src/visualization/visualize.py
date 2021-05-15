@@ -1,3 +1,5 @@
+from src.models.network import NeuronBud
+
 class TBLogger():
     def __init__(self, writer):
         self.writer = writer
@@ -24,12 +26,19 @@ class TBLogger():
                     epoch)
 
         # Log total number of buds
-        log_model_n_buds, log_model_lipschitz = model.get_n_buds()
-        self.writer.add_scalar('total_n_buds', log_model_n_buds, epoch)
+        self.writer.add_scalar('total_n_buds', NeuronBud.counter, epoch)
 
-        # Log values of lipschitz constants in buds
+        # Log values of lipschitz constants and number of buds in every layer
+        log_model_lipschitz, log_model_buds = model.get_model_params()
+
         for lipschitz_key in log_model_lipschitz:
             self.writer.add_scalars(
-                lipschitz_key, 
+                lipschitz_key,
                 log_model_lipschitz[lipschitz_key], 
+                epoch)
+
+        for bud_key in log_model_buds:
+            self.writer.add_scalar(
+                bud_key,
+                log_model_buds[bud_key],
                 epoch)

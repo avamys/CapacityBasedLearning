@@ -38,7 +38,7 @@ class Model(nn.Module):
 
 
 class LinearBud(nn.Module):
-    ''' Static Bud model with two 3x3 hidden layers and given output size '''
+    ''' Parametrized Bud model with linear layers '''
     def __init__(self, size_in: int, size_out: int, layers: List[int], 
                  activation_name: str, activation_out: str):
         super().__init__()
@@ -64,7 +64,7 @@ class LinearBud(nn.Module):
 
 
 class NeuronBud(nn.Module):
-    ''' Parametrized Bud model '''
+    ''' Parametrized Bud model with budding layers '''
     counter = 0
     def __init__(self, size_in: int, size_out: int, window_size: int, 
                  threshold: float, layers: List[int],
@@ -89,26 +89,27 @@ class NeuronBud(nn.Module):
         for layer_id, layer in enumerate(layers):
             self.layerlist.append(BuddingLayer(n_in, layer, window_size, level=self.level, idx=layer_id))
             n_in = layer
-        self.layerlist.append(BuddingLayer(layers[-1], size_out, window_size, level=self.level, idx=len(layers)-1))
+        self.layerlist.append(BuddingLayer(layers[-1], size_out, window_size, level=self.level, idx=len(layers)))
 
     def get_saturation(self, best_lipschitz):
         if best_lipschitz is not None:
-            return best_lipschitz < self.threshold
+            return (best_lipschitz > 0) & (best_lipschitz < self.threshold)
         return None
 
-    def get_n_buds(self):
-        ''' Aggregate parameters of every layer '''
-        n_buds = 0
+    def get_layers_params(self):
+        ''' Aggregate parameters of every budding layer '''
         lipschitz_consts = dict()
+        buds_grown = dict()
         for idx, layer in enumerate(self.layerlist):
-            n_buds += len(layer.buds)
+            buds_grown[f'{self.level}_{self.parent_id}_{self.id}_{idx}_buds'] = len(layer.buds)
+            buds_grown.update(layer.lower_buds)
             lips = layer.get_lipschitz_constant()
             if lips is not None:
                 keys = [str(i) for i in range(lips.shape[0])]
-                lipschitz_consts[f'lipschitz_{self.level}_{self.parent_id}_{self.id}_{idx}'] = dict(zip(keys, lips))
+                lipschitz_consts[f'{self.level}_{self.parent_id}_{self.id}_{idx}_lipschitz'] = dict(zip(keys, lips))
             lipschitz_consts.update(layer.lower_lipschitz)
 
-        return n_buds, lipschitz_consts
+        return lipschitz_consts, buds_grown
 
     def forward(self, x, optim=None):
         # Distribution of input weights to the first layer
@@ -121,7 +122,7 @@ class NeuronBud(nn.Module):
             saturation = self.get_saturation(lip)
             x, lip = self.layerlist[i+1].forward(x, saturation, optim)
 
-        return self.activation_out(x)
+        return x
 
 
 class BuddingLayer(nn.Module):
@@ -146,8 +147,8 @@ class BuddingLayer(nn.Module):
         
         self.level = level
         self.id = idx
-        self.n_buds = 0
         self.lower_lipschitz = dict()
+        self.lower_buds = dict()
 
         self.weight = nn.Parameter(Tensor(size_out, size_in))
         if bias:
@@ -177,7 +178,7 @@ class BuddingLayer(nn.Module):
         current_weights = self.state_dict()['weight']
 
         for epoch_id, cached_weights in enumerate(self.weights_window):
-            dist_func = torch.abs(torch.sum(cached_weights - current_weights, dim=1))
+            dist_func = torch.sum(cached_weights, dim=1) - torch.sum(current_weights, dim=1)
             dist_points = self.window_size - epoch_id
 
             self.lipshitz_constants.append(dist_func / dist_points)
@@ -191,15 +192,12 @@ class BuddingLayer(nn.Module):
             return torch.max(torch.stack(list(self.lipshitz_constants), dim=1), dim=1)[0]
         return None
 
-    def get_n_buds(self):
-        ''' Sum up number of buds grown in lower levels '''
-        sum_buds = 0
+    def get_buds_params(self):
+        ''' Store params of buds from lower levels '''
         for key in self.buds:
-            lower_n_buds, buds_lipschitz = self.buds[key].get_n_buds()
-            sum_buds += lower_n_buds
+            buds_lipschitz, lower_buds_grown = self.buds[key].get_layers_params()
+            self.lower_buds.update(lower_buds_grown)
             self.lower_lipschitz.update(buds_lipschitz)
-
-        self.n_buds = sum_buds
 
     def forward(self, x: Tensor, saturated: Tensor = None, optim=None) -> Tuple:
         ''' saturated tensor should be provided from the previous layer
@@ -230,10 +228,10 @@ class BuddingLayer(nn.Module):
                             size_in=3,
                             size_out=self.size_out, 
                             window_size=self.window_size,
-                            threshold=0.001, 
+                            threshold=0.0001, 
                             layers=(3,3), 
-                            activation_name='tanh', 
-                            activation_out='tanh', 
+                            activation_name='relu', 
+                            activation_out='relu', 
                             level=self.level,
                             parent=self.id)
                         
@@ -251,7 +249,7 @@ class BuddingLayer(nn.Module):
                 # Apply linear transformation for non-saturated neurons
                 x = x * (~self.saturated_neurons).float()
 
-            self.get_n_buds()
+            self.get_buds_params()
             
         x = F.linear(x, self.weight, self.bias)
 
@@ -272,28 +270,26 @@ class CapacityModel(nn.Module):
         n_in = size_in
         self.layerlist = nn.ModuleList()
 
-        for layer in layers:
-            self.layerlist.append(BuddingLayer(n_in, layer, window_size))
+        for layer_id, layer in enumerate(layers):
+            self.layerlist.append(BuddingLayer(n_in, layer, window_size, idx=layer_id))
             n_in = layer
-        self.layerlist.append(BuddingLayer(layers[-1], size_out, window_size))
+        self.layerlist.append(BuddingLayer(layers[-1], size_out, window_size, idx=len(layers)))
 
     def get_saturation(self, best_lipschitz):
         if best_lipschitz is not None:
-            return best_lipschitz < self.threshold
+            return (best_lipschitz > 0) & (best_lipschitz < self.threshold)
         return None
 
-    def get_n_buds(self):
+    def get_model_params(self):
         ''' Aggregate all information from lower levels' layers and buds
             (Used for logging)
         '''
-        n_buds_core = 0
-        n_buds_layers = 0
         lower_lipschitz = dict()
+        lower_buds = dict()
         for layer in self.layerlist:
-            n_buds_core += len(layer.buds)
-            n_buds_layers += layer.n_buds
+            lower_buds.update(layer.lower_buds)
             lower_lipschitz.update(layer.lower_lipschitz)
-        return n_buds_core + n_buds_layers, lower_lipschitz
+        return lower_lipschitz, lower_buds
 
     def forward(self, x, optim=None):
         x, lip = self.layerlist[0].forward(x, optim=optim)
