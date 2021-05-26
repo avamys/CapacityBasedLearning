@@ -8,7 +8,13 @@ from src.models.network import NeuronBud, BuddingLayer
 
 class TestBuddingLayer(unittest.TestCase):
     def setUp(self):
-        self.bud = BuddingLayer(2, 2, 1)
+        self.params = {
+            'size_in': 3,
+            'threshold': 0.001,
+            'layers': [3,3],
+            'activation': 'tanh'
+        }
+        self.bud = BuddingLayer(2, 2, 1, self.params)
         self.bud.weight = nn.Parameter(torch.ones((2,2)))
         self.bud.bias = nn.Parameter(torch.ones(2))
 
@@ -49,7 +55,7 @@ class TestBuddingLayer(unittest.TestCase):
         self.assertTrue(torch.equal(y, expected_y))
 
     def test_window_cap(self):
-        model = BuddingLayer(2, 2, 2)
+        model = BuddingLayer(2, 2, 2, self.params)
         model.weight = nn.Parameter(torch.ones((2,2)))
         self.assertEqual(len(model.weights_window), 0)
 
@@ -77,7 +83,13 @@ class TestBuddingLayer(unittest.TestCase):
 
 class TestNeuronBud(unittest.TestCase):
     def setUp(self):
-        self.model = NeuronBud(2, 2, 1, 0.01, [2,2], 'tanh', 'tanh')
+        self.params = {
+            'size_in': 2,
+            'threshold': 0.01,
+            'layers': [2,2],
+            'activation': 'tanh'
+        }
+        self.model = NeuronBud(2, 1, self.params)
 
     def test_init(self):
         self.assertEqual(len(self.model.layerlist), 3)
