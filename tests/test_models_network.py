@@ -8,7 +8,13 @@ from src.models.network import NeuronBud, BuddingLayer
 
 class TestBuddingLayer(unittest.TestCase):
     def setUp(self):
-        self.bud = BuddingLayer(2, 2, 1)
+        self.params = {
+            'size_in': 3,
+            'threshold': 0.001,
+            'layers': [3,3],
+            'activation': 'tanh'
+        }
+        self.bud = BuddingLayer(2, 2, 1, self.params)
         self.bud.weight = nn.Parameter(torch.ones((2,2)))
         self.bud.bias = nn.Parameter(torch.ones(2))
 
@@ -37,6 +43,7 @@ class TestBuddingLayer(unittest.TestCase):
 
     def test_forward_with_bud(self):
         y, lip = self.bud.forward(self.x, self.saturated, self.optim)
+        self.bud.eval()
 
         u = self.bud.buds['1'](self.x[:, 1].view(-1, 1), self.optim)
         zero_x = self.x * (~self.saturated).float()
@@ -48,7 +55,7 @@ class TestBuddingLayer(unittest.TestCase):
         self.assertTrue(torch.equal(y, expected_y))
 
     def test_window_cap(self):
-        model = BuddingLayer(2, 2, 2)
+        model = BuddingLayer(2, 2, 2, self.params)
         model.weight = nn.Parameter(torch.ones((2,2)))
         self.assertEqual(len(model.weights_window), 0)
 
@@ -74,6 +81,31 @@ class TestBuddingLayer(unittest.TestCase):
         self.assertEqual(len(self.bud.lipshitz_constants), 1)
         self.assertTrue(torch.equal(lip, torch.tensor([2.0, 2.0])))
 
+class TestNeuronBud(unittest.TestCase):
+    def setUp(self):
+        self.params = {
+            'size_in': 2,
+            'threshold': 0.01,
+            'layers': [2,2],
+            'activation': 'tanh'
+        }
+        self.model = NeuronBud(2, 1, self.params)
+
+    def test_init(self):
+        self.assertEqual(len(self.model.layerlist), 3)
+        
+        expected_weight = torch.tensor([0.5, 0.5]).view(1, -1)
+        self.assertTrue(torch.equal(self.model.weight, expected_weight))
+
+    def test_best_lipschitz(self):
+        lipschitz = None
+        saturation = self.model.get_saturation(lipschitz)
+        self.assertIs(saturation, None)
+
+        lipschitz = torch.tensor([1, 1, 0.01, 0.001])
+        expected = torch.tensor([False, False, False, True])
+        saturation = self.model.get_saturation(lipschitz)
+        self.assertTrue(torch.equal(expected, saturation))
 
 if __name__ == '__main__':
     unittest.main()

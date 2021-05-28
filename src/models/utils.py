@@ -14,9 +14,22 @@ def get_activation(activation: str):
 
     return activations[activation]
 
-def calculate_lipschitz_constant(x1: torch.tensor, x2: torch.tensor, weights: torch.tensor):
-    ''' Returns the value of Lipschitz constant for the given points '''
+def get_optimizer(optimizer: str):
+    ''' Returns torch optimizer given the corresponding name '''
 
-    dist_func = torch.abs(weights @ x2 - weights @ x1)
-    dist_points = torch.norm(x2 - x1)
-    return dist_func / dist_points
+    optimizers = {
+        'adam': torch.optim.Adam,
+        'sgd': torch.optim.SGD
+    }
+
+    return optimizers[optimizer]
+
+def get_criterion(criterion: str):
+    ''' Returns torch loss function given the corresponding name '''
+
+    criterions = {
+        'cross-entropy': nn.CrossEntropyLoss,
+        'mse': nn.MSELoss
+    }
+
+    return criterions[criterion]

@@ -56,7 +56,7 @@ preprocessing:
 ## Train Model
 train:
 	@echo ">>> Training model"
-	$(PYTHON_INTERPRETER) src/models/train_model.py data/processed/adult_features.csv data/processed/adult_target.csv
+	$(PYTHON_INTERPRETER) src/models/train_model.py data/processed/adult_features.csv data/processed/adult_target.csv experiments/experiment_test.yaml
 
 ## Run tests
 run_tests:

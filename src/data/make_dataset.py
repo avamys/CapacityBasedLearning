@@ -7,24 +7,25 @@ from preprocessing import DataPreprocessor
 
 
 @click.command()
-@click.argument('input_filepath', type=click.Path(exists=True))
+@click.argument('dataset')
+@click.argument('input_path', type=click.Path())
 @click.argument('output_filepath', type=click.Path())
-def main(input_filepath, output_filepath):
+def main(dataset, input_path, output_filepath):
     """ Runs data processing scripts to turn raw data from (../raw) into
         cleaned data ready to be analyzed (saved in ../processed).
     """
     logger = logging.getLogger(__name__)
     logger.info('making final data sets from raw data')
-    preprocessor = DataPreprocessor()
+    preprocessor = DataPreprocessor(dataset)
 
     logger.info('reading data file')
-    preprocessor.read_data(input_filepath)
+    X, y = preprocessor.read_data(input_path)
 
     logger.info('processing data')
-    preprocessor.preprocess_data()
+    X, y = preprocessor.preprocess_data(X, y)
 
     logger.info('saving processed data')
-    preprocessor.write_data(output_filepath)
+    preprocessor.write_data(output_filepath, X, y)
 
 
 if __name__ == '__main__':

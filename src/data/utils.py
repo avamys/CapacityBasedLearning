@@ -1,17 +1,41 @@
+import os
+import zipfile
 import pandas as pd
 import numpy as np
-from typing import Tuple, Any
+from urllib import request
+from typing import Tuple, Callable, Union
+
+Dataset = Tuple[pd.DataFrame, Union[pd.DataFrame, pd.Series]]
 
 
-def get_preprocessing_function(dataset: str) -> Any:
+def get_url(dataset: str) -> str:
+
+    urls = {
+        'binary': "https://archive.ics.uci.edu/ml/machine-learning-databases/adult/adult.data",
+        'multiclass': "https://archive.ics.uci.edu/ml/machine-learning-databases/00602/DryBeanDataset.zip",
+        'extreme': "https://archive.ics.uci.edu/ml/machine-learning-databases/letter-recognition/letter-recognition.data"
+    }
+
+    return urls[dataset]
+
+def get_dataset(dataset: str, folder: str) -> None:
+    url = get_url(dataset)
+    os.makedirs(folder, exist_ok=True)
+    file_path = os.path.join(folder, dataset)
+
+    if not os.path.exists(file_path):
+        request.urlretrieve(url, file_path)
+        if url.endswith(".zip"):
+            file = zipfile.ZipFile(file_path)
+            file.extractall(folder)
+
+def get_preprocessing_function(dataset: str) -> Callable[[str], Dataset]:
     ''' Returns preprocessing function given the corresponding dataset name '''
 
     preprocessing_function = {
-        'obesity': obesity,
-        'drugs': drugs,
-        'adult': adult,
-        'mice': mice,
-        'anneal': anneal
+        'binary': adult,
+        'multiclass': dry_bean,
+        'extreme': letter_recognition
     }
 
     return preprocessing_function[dataset]
@@ -68,18 +92,37 @@ def mice(file: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     return X, y
 
 
-def adult(file: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def adult(root: str) -> Dataset:
     ''' Loads and does preliminary processing for UCI Adult dataset '''
 
     columns = ['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 
                'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss',
                'hours-per-week', 'native-country', 'income']
-    df = pd.read_csv(file, delimiter=',', names=columns)
+    path = f'{root}/binary'
+    df = pd.read_csv(path, delimiter=',', names=columns)
 
     X, y = df.iloc[:, :-1], df.iloc[:, -1]
 
     return X, y
 
+def letter_recognition(root: str) -> Dataset:
+
+    columns = ['lettr', 'x-box', 'y-box', 'width', 'high', 'onpix', 'x-bar', 'y-bar',
+               'x2bar', 'y2bar', 'xybar', 'x2ybr', 'xy2br', 'x-ege', 'xegvy', 'y-ege', 'yegvx']
+    path = f'{root}/extreme'
+    df = pd.read_csv(path, delimiter=',', names=columns)
+
+    X, y = df.iloc[:, 1:], df.iloc[:, 0]
+
+    return X, y
+
+def dry_bean(root: str) -> Dataset:
+    path = f'{root}/DryBeanDataset/Dry_Bean_Dataset.xlsx'
+    df = pd.read_excel(path)
+
+    X, y = df.iloc[:, :-1], df.iloc[:, -1]
+
+    return X, y
 
 def anneal(file: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     ''' Loads and does preliminary processing for UCI Annealing dataset '''

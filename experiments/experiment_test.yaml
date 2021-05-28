@@ -1,0 +1,27 @@
+name: exp-test
+dir: runs
+
+training:
+  test_size: 0.3
+  epochs: 50
+  criterion: 'cross-entropy'
+
+parameters:
+  optimizer: 'adam'
+  learning_rate: 0.01
+
+# Model parameters
+  layers: [
+    10,
+    10
+  ]
+  activation: 'relu'
+  window_size: 5
+  threshold: 0.001
+
+# Buds parameters
+  buds_parameters:
+    size_in: 3
+    threshold: 0.001
+    layers: [3, 3]
+    activation: 'relu'
