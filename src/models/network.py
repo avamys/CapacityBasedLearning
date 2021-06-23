@@ -73,6 +73,7 @@ class NeuronBud(nn.Module):
 
         self.window_size = window_size
         self.size_in = params['size_in']
+        params['threshold'] *= params['decline']
         self.threshold = params['threshold']
         self.activation = get_activation(params['activation'])()
         self.layers = params['layers']
@@ -125,6 +126,10 @@ class NeuronBud(nn.Module):
             lipschitz_consts.update(layer.lower_lipschitz)
 
         return lipschitz_consts, buds_grown
+
+    def update_budding_layers(self):
+        for i, l in enumerate(self.layerlist):
+            l.update_state()
 
     def forward(self, x, optim=None):
         # Distribution of input weights to the first layer
@@ -214,13 +219,18 @@ class BuddingLayer(nn.Module):
             self.lower_buds.update(lower_buds_grown)
             self.lower_lipschitz.update(buds_lipschitz)
 
+    def update_state(self):
+        if self.training:
+            self.__update_lipschitz_cache() # update lipschitz deque with current weights
+            self.__update_cache() # update weights deque with current weights
+
+        for key in self.buds:
+            self.buds[key].update_budding_layers()
+
     def forward(self, x: Tensor, saturated: Tensor = None, optim=None) -> Tuple:
         ''' saturated tensor should be provided from the previous layer
 
         '''
-        if self.training:
-            self.__update_lipschitz_cache() # update lipschitz deque with current weights
-            self.__update_cache() # update weights deque with current weights
 
         best_lipschitz_constant = self.get_lipschitz_constant()
         u = 0
@@ -303,6 +313,11 @@ class CapacityModel(nn.Module):
                 lower_buds.update(layer.lower_buds)
                 lower_lipschitz.update(layer.lower_lipschitz)
         return lower_lipschitz, lower_buds
+
+    def update_budding_layers(self):
+        for i, l in enumerate(self.layerlist):
+            if isinstance(l, BuddingLayer):
+                l.update_state()
 
     def forward(self, x, optim=None):
         x, lip = self.layerlist[0].forward(x, optim=optim)

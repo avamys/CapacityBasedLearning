@@ -10,6 +10,7 @@ parameters:
   model: 'benchmark'
   optimizer: 'adam'
   learning_rate: 0.01
+  batch_size: 64
 
 # Model parameters
   model_params:

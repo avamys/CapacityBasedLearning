@@ -3,13 +3,14 @@ dir: runs
 
 training:
   test_size: 0.3
-  epochs: 100
+  epochs: 50
   criterion: 'cross-entropy'
 
 parameters:
   model: 'capacity'
   optimizer: 'adam'
   learning_rate: 0.01
+  batch_size: 64
 
 # Model parameters
   model_params:
@@ -19,11 +20,12 @@ parameters:
     ]
     activation_name: 'relu'
     window_size: 5
-    threshold: 0.0001
+    threshold: 0.01
 
 # Buds parameters
     buds_params:
       size_in: 3
-      threshold: 0.001
+      threshold: 0.01
+      decline: 0.1
       layers: [3, 3]
       activation: 'relu'

@@ -11,6 +11,7 @@ class TestBuddingLayer(unittest.TestCase):
         self.params = {
             'size_in': 3,
             'threshold': 0.001,
+            'decline': 1.0,
             'layers': [3,3],
             'activation': 'tanh'
         }
@@ -33,7 +34,9 @@ class TestBuddingLayer(unittest.TestCase):
 
     def test_basic_forward(self):
         y, lip = self.bud.forward(self.x)
-
+        
+        self.assertEqual(len(self.bud.weights_window), 0)
+        self.bud.update_state()
         self.assertEqual(len(self.bud.weights_window), 1)
         self.assertEqual(len(self.bud.lipshitz_constants), 0)
         self.assertIsNone(lip)
@@ -59,12 +62,14 @@ class TestBuddingLayer(unittest.TestCase):
         model.weight = nn.Parameter(torch.ones((2,2)))
         self.assertEqual(len(model.weights_window), 0)
 
+        model.update_state()
         y, lip = model.forward(self.x, self.saturated, self.optim)
         self.assertEqual(len(model.weights_window), 1)
 
         model.weight = nn.Parameter(torch.ones((2,2)) * 2)
         self.assertIsNot(model.weights_window[0], model.state_dict()['weight'])
 
+        model.update_state()
         y, lip = model.forward(self.x, self.saturated, self.optim)
         self.assertEqual(len(model.weights_window), 2)
         self.assertIsNot(model.weights_window[0], model.weights_window[1])
@@ -73,9 +78,11 @@ class TestBuddingLayer(unittest.TestCase):
         lip = self.bud.get_lipschitz_constant()
         self.assertIsNone(lip)
 
+        self.bud.update_state()
         y, lip = self.bud.forward(self.x, self.saturated, self.optim)
         self.bud.weight = nn.Parameter(torch.ones((2,2)) * 2)
 
+        self.bud.update_state()
         y, lip = self.bud.forward(self.x, self.saturated, self.optim)
 
         self.assertEqual(len(self.bud.lipshitz_constants), 1)
@@ -86,6 +93,7 @@ class TestNeuronBud(unittest.TestCase):
         self.params = {
             'size_in': 2,
             'threshold': 0.01,
+            'decline': 1.0,
             'layers': [2,2],
             'activation': 'tanh'
         }
@@ -105,6 +113,7 @@ class TestNeuronBud(unittest.TestCase):
         lipschitz = torch.tensor([1, 1, 0.01, 0.001])
         expected = torch.tensor([False, False, False, True])
         saturation = self.model.get_saturation(lipschitz)
+        print(saturation)
         self.assertTrue(torch.equal(expected, saturation))
 
 if __name__ == '__main__':
