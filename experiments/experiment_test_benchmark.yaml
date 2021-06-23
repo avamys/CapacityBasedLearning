@@ -1,4 +1,4 @@
-name: exp-test
+name: exp-test-benchmark
 dir: runs
 
 training:
@@ -7,7 +7,7 @@ training:
   criterion: 'cross-entropy'
 
 parameters:
-  model: 'capacity'
+  model: 'benchmark'
   optimizer: 'adam'
   learning_rate: 0.01
 
@@ -18,12 +18,4 @@ parameters:
       10
     ]
     activation_name: 'relu'
-    window_size: 5
-    threshold: 0.0001
-
-# Buds parameters
-    buds_params:
-      size_in: 3
-      threshold: 0.001
-      layers: [3, 3]
-      activation: 'relu'
+    activation_out: 'relu'

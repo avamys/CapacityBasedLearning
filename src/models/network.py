@@ -16,7 +16,7 @@ Config = Dict[str, Union[int, float, str, List[int]]]
 class Model(nn.Module):
     ''' Simple parametrized network '''
     
-    def __init__(self, in_features: int, out_size: int, layers: List[int],
+    def __init__(self, size_in: int, size_out: int, layers: List[int],
                  activation_name: str, activation_out: str):
 
         super().__init__()
@@ -24,13 +24,13 @@ class Model(nn.Module):
         activation_method = get_activation(activation_name)
         activation_out = get_activation(activation_out)
         layerlist = []
-        n_in = in_features
+        n_in = size_in
 
         for layer in layers:
             layerlist.append(nn.Linear(n_in, layer))
             layerlist.append(activation_method())
             n_in = layer
-        layerlist.append(nn.Linear(layers[-1], out_size))
+        layerlist.append(nn.Linear(layers[-1], size_out))
         layerlist.append(activation_out())
 
         self.layers = nn.Sequential(*layerlist)
@@ -222,7 +222,7 @@ class BuddingLayer(nn.Module):
             self.__update_lipschitz_cache() # update lipschitz deque with current weights
             self.__update_cache() # update weights deque with current weights
 
-        best_lipschitz_constant = self.get_lipschitz_constant() 
+        best_lipschitz_constant = self.get_lipschitz_constant()
         u = 0
 
         if saturated is not None:
@@ -284,6 +284,7 @@ class CapacityModel(nn.Module):
         for layer_id, layer in enumerate(layers):
             self.layerlist.append(BuddingLayer(n_in, layer, window_size, buds_params, idx=layer_id))
             n_in = layer
+            self.layerlist.append(nn.BatchNorm1d(n_in))
         self.layerlist.append(BuddingLayer(layers[-1], size_out, window_size, buds_params, idx=len(layers)))
 
     def get_saturation(self, best_lipschitz):
@@ -298,15 +299,19 @@ class CapacityModel(nn.Module):
         lower_lipschitz = dict()
         lower_buds = dict()
         for layer in self.layerlist:
-            lower_buds.update(layer.lower_buds)
-            lower_lipschitz.update(layer.lower_lipschitz)
+            if isinstance(layer, BuddingLayer):
+                lower_buds.update(layer.lower_buds)
+                lower_lipschitz.update(layer.lower_lipschitz)
         return lower_lipschitz, lower_buds
 
     def forward(self, x, optim=None):
         x, lip = self.layerlist[0].forward(x, optim=optim)
         for i, l in enumerate(self.layerlist[1:]):
-            x = self.activation(x)
-            saturation = self.get_saturation(lip)
-            x, lip = self.layerlist[i+1].forward(x, saturation, optim)
+            if isinstance(l, BuddingLayer):
+                x = self.activation(x)
+                saturation = self.get_saturation(lip)
+                x, lip = self.layerlist[i+1].forward(x, saturation, optim)
+            else:
+                x = self.layerlist[i+1].forward(x)
 
-        return x
+        return self.activation(x)

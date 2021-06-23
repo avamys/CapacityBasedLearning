@@ -36,6 +36,16 @@ class Configurator():
         self.parameters = self.config['parameters']
         self.local_dir = self.config['dir']
 
+        self.model_type = self.parameters['model']
+        self.forward_optim = True if self.model_type == 'capacity' else False
+
+    def get_model(self, model: str):
+        models = {
+            'capacity': CapacityModel,
+            'benchmark': Model
+        }
+        return models[model]
+
     def train(self, config: Config, checkpoint_dir: Optional[str] = None) -> None:
         ''' Performs full training of a specified model in specified number of epochs '''
 
@@ -44,15 +54,10 @@ class Configurator():
 
         losses_train, losses_validate = [], []
 
-        model = CapacityModel(
+        model = self.get_model(self.model_type)(
             size_in=self.features.shape[1], 
             size_out=len(np.unique(self.target)), 
-            window_size=config['window_size'], 
-            threshold=config['threshold'], 
-            layers=config['layers'], 
-            activation_name=config['activation'],
-            buds_params=config['buds_parameters']
-        )
+            **config['model_params'])
 
         writer.add_graph(model, self.features)
 
@@ -61,7 +66,7 @@ class Configurator():
         for epoch in range(self.epochs):
 
             # Training step
-            loss_train = training_step(model, self.criterion, optimizer, self.features, self.target, forward_optim=True)
+            loss_train = training_step(model, self.criterion, optimizer, self.features, self.target, forward_optim=self.forward_optim)
             losses_train.append(loss_train)
 
             # Logging

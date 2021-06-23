@@ -5,9 +5,9 @@ from src.data.utils import *
 
 class TestDataUtils(unittest.TestCase):
     def test_get_preprocessing_function(self):
-        self.assertIs(get_preprocessing_function('drugs'), drugs)
-        self.assertIs(get_preprocessing_function('obesity'), obesity)
-        self.assertIs(get_preprocessing_function('mice'), mice)
+        self.assertIs(get_preprocessing_function('binary'), adult)
+        self.assertIs(get_preprocessing_function('extreme'), letter_recognition)
+        self.assertIs(get_preprocessing_function('multiclass'), dry_bean)
 
     @patch('src.data.utils.pd')
     def test_anneal(self, mock_pd):

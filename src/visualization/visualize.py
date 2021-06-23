@@ -1,4 +1,4 @@
-from src.models.network import NeuronBud
+from src.models.network import NeuronBud, BuddingLayer
 
 class TBLogger():
     def __init__(self, writer):
@@ -11,19 +11,20 @@ class TBLogger():
         # Level 0
         for layer_id, layer in enumerate(model.layerlist):
             # Log number of buds in each layer in level 0
-            self.writer.add_scalar(
-                f'buds_layer{layer_id}', 
-                len(layer.buds), 
-                epoch)
-
-            # Log value of best lipschitz constants in level 0
-            lips = layer.get_lipschitz_constant()
-            if lips is not None:
-                keys = [str(i) for i in range(lips.shape[0])]
-                self.writer.add_scalars(
-                    f'lipschitz_layer{layer_id}', 
-                    dict(zip(keys, lips)), 
+            if isinstance(layer, BuddingLayer):
+                self.writer.add_scalar(
+                    f'buds_layer{layer_id}', 
+                    len(layer.buds), 
                     epoch)
+
+                # Log value of best lipschitz constants in level 0
+                lips = layer.get_lipschitz_constant()
+                if lips is not None:
+                    keys = [str(i) for i in range(lips.shape[0])]
+                    self.writer.add_scalars(
+                        f'lipschitz_layer{layer_id}', 
+                        dict(zip(keys, lips)), 
+                        epoch)
 
         # Log total number of buds
         self.writer.add_scalar('total_n_buds', NeuronBud.counter, epoch)
