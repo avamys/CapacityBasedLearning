@@ -34,18 +34,13 @@ def main(input_features, input_target, config_file):
     with open(config_file) as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    training_params = config['training']
-
     logger.info('loading data')
     X = np.genfromtxt(input_features, delimiter=',')
     y = np.genfromtxt(input_target, delimiter=',')
-    X_train, X_test, y_train, y_test = data_split(X, y, training_params['test_size'])
 
     logger.info('running')
 
-    criterion = get_criterion(training_params['criterion'])()
-    epochs = training_params['epochs']
-    trainer = Configurator(config, criterion, epochs, X_train, y_train, X_test, y_test)
+    trainer = Configurator(config, X, y)
     analysis = trainer.run()
 
     print("Best config: ",analysis.get_best_config(metric="accuracy", mode="max"))

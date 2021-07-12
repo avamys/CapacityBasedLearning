@@ -11,9 +11,9 @@ from torch import Tensor
 from typing import Dict, List, Union, Callable, Optional
 
 from src.models.network import Model, CapacityModel
-from src.models.training import training_step, validation_step
+from src.models.training import training_step, validation_step, data_split
 from src.visualization.visualize import TBLogger
-from src.models.utils import get_optimizer
+from src.models.utils import get_optimizer, get_criterion
 
 from torch.utils.data import TensorDataset, DataLoader
 
@@ -22,21 +22,16 @@ LossFunction = Callable[[Tensor, Tensor], Tensor]
 Config = Dict[str, Union[int, float, str, List[int]]]
 
 class Configurator():
-    def __init__(self, config: Config, criterion: LossFunction, epochs: int,
-                 features: Tensor, target: Tensor, features_val: Tensor, 
-                 target_val: Tensor) -> None:
+    def __init__(self, config: Config, features: np.ndarray, target: np.ndarray) -> None:
         self.config = config
-        self.criterion = criterion
-        self.epochs = epochs
-
-        self.features = features
-        self.target = target
-        self.features_val = features_val
-        self.target_val = target_val
-
         self.name = self.config['name']
         self.parameters = self.config['parameters']
         self.local_dir = self.config['dir']
+
+        training_params = config['training']
+        self.criterion = get_criterion(training_params['criterion'])()
+        self.epochs = training_params['epochs']
+        self.features, self.features_val, self.target, self.target_val = data_split(features, target, training_params['test_size'])
 
         self.model_type = self.parameters['model']
         self.forward_optim = True if self.model_type == 'capacity' else False
