@@ -65,6 +65,53 @@ class LinearBud(nn.Module):
         return self.layers(x)
 
 
+class BaseCapacity(nn.Module):
+    ''' Base class for capacity-based models '''
+    def __init__(self, size_in: int, size_out: int, window_size: int, 
+                 threshold: float, layers: List[int], 
+                 activation_name: str, buds_params: Config):
+        super().__init__()
+
+        self.size_in = size_in
+        self.window_size = window_size
+        self.threshold = threshold
+        self.activation = get_activation(activation_name)()
+
+        self.layerlist = nn.ModuleList()
+
+        n_in = self.size_in
+
+        # Create feedforward network with budding layers
+        for layer_id, layer in enumerate(layers):
+            self.layerlist.append(BuddingLayer(
+                size_in=n_in,
+                size_out=layer,
+                window_size=window_size,
+                buds_params=buds_params, 
+                level=self.level, 
+                idx=layer_id))
+            n_in = layer
+
+        self.layerlist.append(BuddingLayer(
+            size_in=self.layers[-1],
+            size_out=size_out,
+            window_size=window_size,
+            buds_params=buds_params, 
+            level=self.level, 
+            idx=len(layers)))
+
+
+    def get_saturation(self, best_lipschitz):
+        if best_lipschitz is not None:
+            return (best_lipschitz > 0) & (best_lipschitz < self.threshold)
+        return None
+
+    def update_budding_layers(self):
+        for i, l in enumerate(self.layerlist):
+            if isinstance(l, BuddingLayer):
+                l.update_state()
+
+
 class NeuronBud(nn.Module):
     ''' Parametrized Bud model with budding layers '''
     counter = 0
