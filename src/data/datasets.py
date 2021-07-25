@@ -24,12 +24,12 @@ class Dataset():
         y = concat[:, -1]
         return Dataset(X, y)
 
-    def to_tensors(self):
+    def to_tensors(self) -> None:
         if not torch.is_tensor(self.X):
             self.X = torch.from_numpy(self.X)
             self.y = torch.from_numpy(self.y)
 
-    def to_numpy(self):
+    def to_numpy(self) -> None:
         if torch.is_tensor(self.X):
             self.X = self.X.numpy()
             self.y = self.y.numpy()
@@ -47,7 +47,7 @@ class Dataset():
 
         return Dataset(X_train, y_train), Dataset(X_test, y_test)
 
-    def as_dataloader(self, batch_size: int = 64):
+    def as_dataloader(self, batch_size: int = 64) -> DataLoader:
         self.to_tensors()
         torch_dataset = TensorDataset(self.X, self.y)
         torch_dataloader = DataLoader(torch_dataset, batch_size=batch_size, shuffle=True)
@@ -62,6 +62,7 @@ class DatasetGenerator():
             'n_samples': n_samples, 'n_numerical': n_numerical, 
             'n_categorical': n_categorical, 'n_binary': n_binary, 
             'noise': noise, 'n_classes': n_classes}
+        self.ids = {key: i for i, key in enumerate(self.base.keys())}
         self.random_state = random_state
             
     def generate_dataset(
@@ -92,15 +93,15 @@ class DatasetGenerator():
 
         return Dataset(X, y)
 
-    def get_base(self):
+    def get_base(self) -> Dataset:
         return self.generate_dataset(**self.base, random_state=self.random_state)
 
     def make_datasets(self, folder: str, feature: str, range_min: int, range_max: int, dist: int):
         values = np.linspace(range_min, range_max, dist)
         params = self.base
+        feature_id = self.ids[feature]
 
         for value in values:
             params[feature] = value
             ds = self.generate_dataset(**params, random_state=self.random_state)
-            ds.save(folder+f'K0_F{value}_{value}')
-
+            ds.save(folder+f'K0_F{feature_id}_{value}.csv')

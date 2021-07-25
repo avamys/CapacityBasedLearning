@@ -42,12 +42,18 @@ class TestDataset(unittest.TestCase):
 
 
 class TestDatasetGenerator(unittest.TestCase):
-    def test_generator(self):
+    def setUp(self):
         base = {
             'n_samples': 1000, 'n_numerical': 10, 'n_categorical': 5, 
             'n_binary': 5, 'noise': 0.0, 'n_classes': 2}
-        generator = DatasetGenerator(**base, random_state=121)
-        ds = generator.get_base()
+        self.generator = DatasetGenerator(**base, random_state=121)
+
+    def test_init(self):
+        self.assertEqual(self.generator.ids['noise'], 4)
+        self.assertEqual(self.generator.ids['n_classes'], 5)
+
+    def test_generator(self):
+        ds = self.generator.get_base()
 
         self.assertIsInstance(ds, Dataset)
         self.assertEqual(ds.X.shape[0], 1000)
