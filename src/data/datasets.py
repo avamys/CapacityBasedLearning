@@ -3,28 +3,40 @@ import numpy as np
 from typing import Union, List, Tuple
 
 from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset, DataLoader
 
 
 class Dataset():
     def __init__(self, X: Union[np.ndarray, torch.Tensor] = None, 
                  y: Union[np.ndarray, torch.Tensor] = None) -> None:
-        
         self.X = X
         self.y = y
 
-    def save(path_x: str, path_y: str) -> None:
-        np.savetxt(path_x, self.X, delimiter=",")
-        np.savetxt(path_y, self.y, delimiter=",")
+    def save(path: str) -> None:
+        concat = np.hstack([self.X, self.y.reshape((-1,1))])
+        np.savetxt(path_x, concat, delimiter=",")
 
     @staticmethod
-    def load(path_x: str, path_y: str) -> Dataset:
-        X = np.genfromtxt(path_x, delimiter=',')
-        y = np.genfromtxt(path_y, delimiter=',')
+    def load(path: str) -> 'Dataset':
+        concat = np.genfromtxt(path, delimiter=',')
+        X = concat[:, :-1]
+        y = concat[:, -1]
         return Dataset(X, y)
 
-    def split(self, test_size, random_state) -> Tuple[Dataset, Dataset]:
+    def to_tensors(self):
+        if not torch.is_tensor(self.X):
+            self.X = torch.from_numpy(self.X)
+            self.y = torch.from_numpy(self.y)
+
+    def to_numpy(self):
+        if torch.is_tensor(self.X):
+            self.X = self.X.numpy()
+            self.y = self.y.numpy()
+
+    def split(self, test_size: float, random_state: int = None) -> Tuple['Dataset', 'Dataset']:
         ''' Performs train/test split and returns results as tenors '''
+        self.to_numpy()
 
         X_train, X_test, y_train, y_test = train_test_split(self.X, self.y, 
             test_size=test_size, random_state=random_state, shuffle=True)
@@ -35,7 +47,8 @@ class Dataset():
 
         return Dataset(X_train, y_train), Dataset(X_test, y_test)
 
-    def as_dataloader(self, batch_size):
+    def as_dataloader(self, batch_size: int = 64):
+        self.to_tensors()
         torch_dataset = TensorDataset(self.X, self.y)
         torch_dataloader = DataLoader(torch_dataset, batch_size=batch_size, shuffle=True)
         return torch_dataloader
@@ -79,11 +92,15 @@ class DatasetGenerator():
 
         return Dataset(X, y)
 
-    def make_datasets(self, feature: str, range_min: int, range_max: int, dist: int):
+    def get_base(self):
+        return self.generate_dataset(**self.base, random_state=self.random_state)
+
+    def make_datasets(self, folder: str, feature: str, range_min: int, range_max: int, dist: int):
         values = np.linspace(range_min, range_max, dist)
         params = self.base
 
         for value in values:
             params[feature] = value
-            ds = generate_dataset(**params, random_state=self.random_state)
+            ds = self.generate_dataset(**params, random_state=self.random_state)
+            ds.save(folder+f'K0_F{value}_{value}')
 
