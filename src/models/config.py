@@ -11,18 +11,17 @@ from torch import Tensor
 from typing import Dict, List, Union, Callable, Optional
 
 from src.models.network import Model, CapacityModel
-from src.models.training import training_step, validation_step, data_split
+from src.models.training import training_step, validation_step
 from src.visualization.visualize import TBLogger
 from src.models.utils import get_optimizer, get_criterion
-
-from torch.utils.data import TensorDataset, DataLoader
+from src.data.datasets import Dataset
 
 
 LossFunction = Callable[[Tensor, Tensor], Tensor]
 Config = Dict[str, Union[int, float, str, List[int]]]
 
 class Configurator():
-    def __init__(self, config: Config, features: np.ndarray, target: np.ndarray) -> None:
+    def __init__(self, config: Config, dataset: Dataset) -> None:
         self.config = config
         self.name = self.config['name']
         self.parameters = self.config['parameters']
@@ -31,7 +30,8 @@ class Configurator():
         training_params = config['training']
         self.criterion = get_criterion(training_params['criterion'])()
         self.epochs = training_params['epochs']
-        self.features, self.features_val, self.target, self.target_val = data_split(features, target, training_params['test_size'])
+        self.dataset = dataset
+        self.train, self.test = self.dataset.split(training_params['test_size'])
 
         self.model_type = self.parameters['model']
         self.forward_optim = True if self.model_type == 'capacity' else False
@@ -49,15 +49,12 @@ class Configurator():
         writer = SummaryWriter(log_dir="custom_logs")
         logger = TBLogger(writer)
 
-        train_dataset = TensorDataset(self.features, self.target)
-        test_dataset = TensorDataset(self.features_val, self.target_val)
-
-        train_dataloader = DataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True)
-        test_dataloader = DataLoader(test_dataset, batch_size=config['batch_size'], shuffle=True)
+        train_dataloader = self.train.as_dataloader(batch_size=config['batch_size'])
+        test_dataloader = self.test.as_dataloader(batch_size=config['batch_size'])
 
         model = self.get_model(self.model_type)(
-            size_in=self.features.shape[1], 
-            size_out=len(np.unique(self.target)), 
+            size_in=self.train.cols, 
+            size_out=self.train.targets, 
             **config['model_params'])
 
         writer.add_graph(model, self.features)
