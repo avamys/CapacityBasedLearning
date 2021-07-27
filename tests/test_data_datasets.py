@@ -12,6 +12,11 @@ class TestDataset(unittest.TestCase):
         y = np.array([1, 0, 2, 0, 1])
         self.ds = Dataset(X, y)
 
+    def test_properties(self):
+        self.assertEqual(self.ds.cols, 3)
+        self.assertEqual(self.ds.rows, 5)
+        self.assertEqual(self.ds.targets, 3)
+
     def test_conversions(self):
         self.ds.to_numpy()
         self.assertIsInstance(self.ds.X, np.ndarray)
@@ -31,8 +36,8 @@ class TestDataset(unittest.TestCase):
         self.assertIsInstance(test.X, torch.Tensor)
         self.assertIsInstance(train.y, torch.LongTensor)
         self.assertIsInstance(test.y, torch.LongTensor)
-        self.assertEqual(test.X.shape[0], 1)
-        self.assertEqual(train.X.shape[0], 4)
+        self.assertEqual(test.rows, 1)
+        self.assertEqual(train.rows, 4)
 
     def test_as_dataloader(self):
         dl = self.ds.as_dataloader(batch_size=2)

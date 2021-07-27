@@ -13,6 +13,9 @@ class Dataset():
         ''' Class for managing datasets '''
         self.X = X
         self.y = y
+        self.rows = X.shape[0]
+        self.cols = X.shape[1]
+        self.targets = len(np.unique(y))
 
     def save(path: str) -> None:
         ''' Save dataset to file '''
