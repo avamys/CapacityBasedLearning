@@ -24,14 +24,14 @@ class TestDataPreprocessor(unittest.TestCase):
             ])
         y = pd.Series(['a', 'b', 'b', 'a'])
         
-        X_p, y_p = self.dp.preprocess_data(X, y)
+        ds = self.dp.preprocess_data(X, y)
 
-        self.assertIsNot(X, X_p)
-        self.assertIsNot(y, y_p)
-        self.assertFalse(np.isnan(X_p).any())
-        self.assertEqual(X_p.shape[1], 7)
-        self.assertTrue((X_p[:, 2]==np.array([1,0,0])).all())
-        self.assertTrue((y_p == np.array([0,1,1,0])).all())
+        self.assertIsNot(X, ds.X)
+        self.assertIsNot(y, ds.y)
+        self.assertFalse(np.isnan(ds.X).any())
+        self.assertEqual(ds.X.shape[1], 7)
+        self.assertTrue((ds.X[:, 2]==np.array([1,0,0])).all())
+        self.assertTrue((ds.y == np.array([0,1,1,0])).all())
 
 if __name__ == '__main__':
     unittest.main()

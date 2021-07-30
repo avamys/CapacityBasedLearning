@@ -22,11 +22,11 @@ def main(dataset, input_path, output_filepath):
     X, y = preprocessor.read_data(input_path)
 
     logger.info('processing data')
-    X, y = preprocessor.preprocess_data(X, y)
+    ds = preprocessor.preprocess_data(X, y)
 
     logger.info('saving processed data')
-    preprocessor.write_data(output_filepath, X, y)
-
+    save_dir = f'{output_filepath}{preprocessor.dataset_name}.csv'
+    ds.save(save_dir)
 
 if __name__ == '__main__':
     log_fmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'

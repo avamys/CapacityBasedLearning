@@ -17,10 +17,10 @@ class Dataset():
         self.cols = X.shape[1]
         self.targets = len(np.unique(y))
 
-    def save(path: str) -> None:
+    def save(self, path: str) -> None:
         ''' Save dataset to file '''
         concat = np.hstack([self.X, self.y.reshape((-1,1))])
-        np.savetxt(path_x, concat, delimiter=",")
+        np.savetxt(path, concat, delimiter=",")
 
     @staticmethod
     def load(path: str) -> 'Dataset':

@@ -9,6 +9,7 @@ from network import Model
 from training import *
 from src.models.config import Configurator
 from src.models.utils import get_criterion
+from src.data.datasets import Dataset
 
 import yaml
 import click
@@ -18,10 +19,9 @@ from dotenv import find_dotenv, load_dotenv
 
 
 @click.command()
-@click.argument('input_features', type=click.File('rb'))
-@click.argument('input_target', type=click.File('rb'))
+@click.argument('input_data', type=click.File('rb'))
 @click.argument('config_file', type=click.Path())
-def main(input_features, input_target, config_file):
+def main(input_data, config_file):
     """ Runs model training scripts to create and train models on prepared
         datasets (from ../processed) and save them in ../models.
     """
@@ -35,12 +35,11 @@ def main(input_features, input_target, config_file):
         config = yaml.load(f, Loader=yaml.FullLoader)
 
     logger.info('loading data')
-    X = np.genfromtxt(input_features, delimiter=',')
-    y = np.genfromtxt(input_target, delimiter=',')
+    ds = Dataset.load(input_data)
 
     logger.info('running')
 
-    trainer = Configurator(config, X, y)
+    trainer = Configurator(config, ds)
     analysis = trainer.run()
 
     print("Best config: ",analysis.get_best_config(metric="accuracy", mode="max"))
