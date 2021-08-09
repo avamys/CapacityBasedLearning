@@ -1,13 +1,18 @@
 import os
+import logging
 import torch
 import numpy as np
-from typing import Union, List, Tuple
 
+from typing import Dict, Union, List, Tuple
 from sklearn.datasets import make_classification
 from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset, DataLoader
 
 from src.data.utils import get_range
+
+
+Config = Dict[str, Union[int, float, str, List[int]]]
+logger = logging.getLogger(__name__)
 
 
 class Dataset():
@@ -77,7 +82,8 @@ class DatasetGenerator():
         self.base = {
             'n_samples': n_samples, 'n_numerical': n_numerical, 
             'n_categorical': n_categorical, 'n_binary': n_binary, 
-            'noise': noise, 'n_classes': n_classes}
+            'noise': noise, 'n_classes': n_classes, 'class_sep': 1.0,
+            'weights': None}
         self.ids = {key: i for i, key in enumerate(self.base.keys())}
         self.random_state = random_state
             
@@ -121,12 +127,25 @@ class DatasetGenerator():
         params = self.base
         feature_id = self.ids[feature]
 
-        try:
-            os.mkdir(folder)
-        except:
-            pass
-
         for value in values:
             params[feature] = value
             ds = self.generate_dataset(**params)
-            ds.save(folder+f'/K0_F{feature_id}_{value}.csv')
+            to_file = folder+f'/K0_F{feature_id}_{value}.csv'
+            ds.save(to_file)
+            logger.info(f'Generated {to_file}')
+
+    def generate(self, folder: str, config: Config):
+        path = f"{folder}/{config['name']}"
+        base = self.get_base()
+
+        try:
+            os.mkdir(path)
+        except:
+            pass
+        
+        base.save(path+'/K0.csv')
+        for feature, params in config['datasets'].items():
+            self.make_datasets(
+                path, feature, params['min'], params['max'], params['dist'])
+        
+        return path
