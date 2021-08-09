@@ -43,12 +43,17 @@ class TestConfigurator(unittest.TestCase):
         self.trainer.epochs = 2
         results = self.trainer.run()
         best = results.get_best_config(metric="accuracy", mode="max")
+
         self.assertTrue('layers' in best['model_params'])
         self.assertTrue('window_size' in best['model_params'])
 
     def test_run_baseline(self):
         self.trainer.epochs = 2
-        results = self.trainer.run_baseline()
+        results = self.trainer.run(baseline=True)
         best = results.get_best_config(metric="accuracy", mode="max")
+
         self.assertTrue('layers' in best['model_params'])
         self.assertFalse('window_size' in best['model_params'])
+        self.assertIn('window_size', self.trainer.parameters['model_params'].keys())
+        self.assertIn('threshold', self.trainer.parameters['model_params'].keys())
+        self.assertIn('layers', self.trainer.parameters['model_params'].keys())

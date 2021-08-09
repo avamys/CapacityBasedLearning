@@ -21,7 +21,7 @@ LossFunction = Callable[[Tensor, Tensor], Tensor]
 Config = Dict[str, Union[int, float, str, List[int]]]
 
 class Configurator():
-    def __init__(self, config: Config, dataset: Dataset) -> None:
+    def __init__(self, config: Config, dataset: Dataset = None) -> None:
         self.config = config
         self.name = self.config['name']
         self.parameters = self.config['parameters']
@@ -31,7 +31,8 @@ class Configurator():
         self.criterion = get_criterion(training_params['criterion'])()
         self.epochs = training_params['epochs']
         self.dataset = dataset
-        self.trainset, self.testset = self.dataset.split(training_params['test_size'])
+        if dataset:
+            self.trainset, self.testset = self.dataset.split(training_params['test_size'])
         self.baseline = False
         self.model_init_params = []
 
@@ -47,6 +48,11 @@ class Configurator():
             layer.weight.data = self.model_init_params[idx]['weight']
             if layer.bias is not None:
                 layer.bias.data = self.model_init_params[idx]['bias']
+
+    def load_new_dataset(self, dataset):
+        self.dataset = dataset
+        test_size = self.config['training']['test_size']
+        self.trainset, self.testset = self.dataset.split(test_size)
 
     def train(self, config: Config, checkpoint_dir: Optional[str] = None) -> None:
         ''' Performs full training of a specified model in specified number of epochs '''
@@ -98,16 +104,24 @@ class Configurator():
 
         writer.close()
 
-    def run(self) -> ExperimentAnalysis:
-        self.baseline = False
-        result = tune.run(self.train, config=self.parameters, name=self.name, verbose=0, local_dir=self.local_dir)
-        return result
+    def run(self, baseline: bool = False, dataset: Dataset = None, save_results: bool = False) -> ExperimentAnalysis:
+        if dataset:
+            self.load_new_dataset(dataset)
 
-    def run_baseline(self) -> ExperimentAnalysis:
-        self.baseline = True
-        baseline_keys = ('layers', 'activation_name', 'activation_out')
-        set_params = {key: self.parameters['model_params'][key] for key in baseline_keys}
-        self.parameters['model_params'] = set_params
-        name = f'{self.name}_baseline'
+        self.baseline = baseline
+        name = self.name
+        if baseline:
+            baseline_keys = ('layers', 'activation_name', 'activation_out')
+            set_params = {key: self.parameters['model_params'][key] for key in baseline_keys}
+            params_cache = self.parameters['model_params']
+            self.parameters['model_params'] = set_params
+            name = f'{self.name}_baseline'
+
         result = tune.run(self.train, config=self.parameters, name=name, verbose=0, local_dir=self.local_dir)
+        if save_results:
+            df_result = result.results_df
+            df_result.to_csv(self.local_dir+'/results.csv')
+
+        if baseline:
+            self.parameters['model_params'] = params_cache
         return result
