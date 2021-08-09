@@ -40,6 +40,14 @@ def get_preprocessing_function(dataset: str) -> Callable[[str], Dataset]:
 
     return preprocessing_function[dataset]
 
+def get_range(range_min: Union[int, float], range_max: Union[int, float], 
+              dist: Union[int, float]):
+    ''' Simple inclusive range generator '''
+    num = range_min
+    while num <= range_max:
+        yield num
+        num += dist
+
 
 def drugs(file: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     ''' Loads and does preliminary processing for UCI drugs dataset '''
