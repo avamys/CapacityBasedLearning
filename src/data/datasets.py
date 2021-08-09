@@ -1,3 +1,4 @@
+import os
 import torch
 import numpy as np
 from typing import Union, List, Tuple
@@ -5,6 +6,8 @@ from typing import Union, List, Tuple
 from sklearn.datasets import make_classification
 from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset, DataLoader
+
+from src.data.utils import get_range
 
 
 class Dataset():
@@ -114,11 +117,16 @@ class DatasetGenerator():
         ''' Create multiple datasets with changing feature and save to the 
             given folder 
         '''
-        values = np.linspace(range_min, range_max, dist)
+        values = get_range(range_min, range_max, dist)
         params = self.base
         feature_id = self.ids[feature]
+
+        try:
+            os.mkdir(folder)
+        except:
+            pass
 
         for value in values:
             params[feature] = value
             ds = self.generate_dataset(**params)
-            ds.save(folder+f'K0_F{feature_id}_{value}.csv')
+            ds.save(folder+f'/K0_F{feature_id}_{value}.csv')
