@@ -31,33 +31,47 @@ class Configurator():
         self.criterion = get_criterion(training_params['criterion'])()
         self.epochs = training_params['epochs']
         self.dataset = dataset
-        self.train, self.test = self.dataset.split(training_params['test_size'])
+        self.trainset, self.testset = self.dataset.split(training_params['test_size'])
+        self.baseline = False
+        self.model_init_params = []
 
-        self.model_type = self.parameters['model']
-        self.forward_optim = True if self.model_type == 'capacity' else False
+    def _save_init_params(self, model: torch.nn.Module):
+        self.model_init_params = []
+        for layer in model.layerlist:
+            weight, bias = layer.parameters()
+            params = {'weight': weight.data.clone(), 'bias': bias.data.clone()}
+            self.model_init_params.append(params)
 
-    def get_model(self, model: str):
-        models = {
-            'capacity': CapacityModel,
-            'benchmark': Model
-        }
-        return models[model]
+    def _load_init_params(self, model: torch.nn.Module):
+        for idx, layer in enumerate(model.layerlist):
+            layer.weight.data = self.model_init_params[idx]['weight']
+            if layer.bias is not None:
+                layer.bias.data = self.model_init_params[idx]['bias']
 
     def train(self, config: Config, checkpoint_dir: Optional[str] = None) -> None:
         ''' Performs full training of a specified model in specified number of epochs '''
 
         writer = SummaryWriter(log_dir="custom_logs")
-        logger = TBLogger(writer)
 
-        train_dataloader = self.train.as_dataloader(batch_size=config['batch_size'])
-        test_dataloader = self.test.as_dataloader(batch_size=config['batch_size'])
+        train_dataloader = self.trainset.as_dataloader(batch_size=config['batch_size'])
+        test_dataloader = self.testset.as_dataloader(batch_size=config['batch_size'])
 
-        model = self.get_model(self.model_type)(
-            size_in=self.train.cols, 
-            size_out=self.train.targets, 
-            **config['model_params'])
+        if not self.baseline:
+            logger = TBLogger(writer)
+            forward_optim = True
+            model = CapacityModel(
+                size_in=self.trainset.cols, 
+                size_out=self.trainset.targets, 
+                **config['model_params'])
 
-        writer.add_graph(model, self.features)
+        else:
+            forward_optim = False
+            model = Model(
+                size_in=self.trainset.cols,
+                size_out=self.trainset.targets, 
+                **config['model_params'])
+
+        writer.add_graph(model, self.trainset.X)
 
         optimizer = get_optimizer(config['optimizer'])(model.parameters(), lr=config['learning_rate'])
 
@@ -66,13 +80,13 @@ class Configurator():
             losses_train, losses_validate, accuracies = [], [], []
             for X, y in train_dataloader:
                 # Training step
-                loss_train = training_step(model, self.criterion, optimizer, X, y, forward_optim=self.forward_optim)
+                loss_train = training_step(model, self.criterion, optimizer, X, y, forward_optim=forward_optim)
                 losses_train.append(loss_train)
             
-            model.update_budding_layers()
-
-            # Logging
-            logger.log_model_params(model, epoch)
+            if not self.baseline:
+                model.update_budding_layers()
+                # Logging
+                logger.log_model_params(model, epoch)
 
             for X, y in test_dataloader:
                 # Validation step
@@ -85,5 +99,15 @@ class Configurator():
         writer.close()
 
     def run(self) -> ExperimentAnalysis:
-        result = tune.run(self.train, config=self.parameters, name=self.name, verbose=3, local_dir=self.local_dir)
+        self.baseline = False
+        result = tune.run(self.train, config=self.parameters, name=self.name, verbose=0, local_dir=self.local_dir)
+        return result
+
+    def run_baseline(self) -> ExperimentAnalysis:
+        self.baseline = True
+        baseline_keys = ('layers', 'activation_name', 'activation_out')
+        set_params = {key: self.parameters['model_params'][key] for key in baseline_keys}
+        self.parameters['model_params'] = set_params
+        name = f'{self.name}_baseline'
+        result = tune.run(self.train, config=self.parameters, name=name, verbose=0, local_dir=self.local_dir)
         return result
