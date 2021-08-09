@@ -90,14 +90,16 @@ class TestBuddingLayer(unittest.TestCase):
 
 class TestNeuronBud(unittest.TestCase):
     def setUp(self):
-        self.params = {
+        params = {
             'size_in': 2,
             'threshold': 0.01,
             'decline': 1.0,
             'layers': [2,2],
             'activation': 'tanh'
         }
-        self.model = NeuronBud(2, 1, self.params)
+        self.model = NeuronBud(size_in=2, size_out=1, threshold=0.01, 
+                               decline=1.0, layers=[2, 2], window_size=5,
+                               activation_name='tanh', buds_params=params)
 
     def test_init(self):
         self.assertEqual(len(self.model.layerlist), 3)

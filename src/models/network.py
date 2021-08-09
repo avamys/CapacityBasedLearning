@@ -68,14 +68,18 @@ class LinearBud(nn.Module):
 class CapacityModel(nn.Module):
     ''' Base class for capacity-based models '''
     def __init__(self, size_in: int, size_out: int, window_size: int, 
-                 threshold: float, layers: List[int], 
-                 activation_name: str, buds_params: Config, level: int = 0):
+                 threshold: float, layers: List[int], activation_name: str,
+                 buds_params: Config, activation_out: str = None, level: int = 0):
         super().__init__()
 
         self.size_in = size_in
         self.window_size = window_size
         self.threshold = threshold
         self.activation = get_activation(activation_name)()
+        if activation_out:
+            self.activation_out = get_activation(activation_out)()
+        else:
+            self.activation_out = self.activation
 
         self.layerlist = nn.ModuleList()
 
@@ -132,14 +136,18 @@ class CapacityModel(nn.Module):
             else:
                 x = self.layerlist[i+1].forward(x)
 
-        return self.activation(x)
+        return self.activation_out(x)
 
 
 class NeuronBud(CapacityModel):
     ''' Parametrized Bud model with budding layers '''
     counter = 0
-    def __init__(self, parent: int = 0):
-        super().__init__()
+    def __init__(self, size_in: int, size_out: int, window_size: int, 
+                 threshold: float, layers: List[int], 
+                 activation_name: str, buds_params: Config, level: int = 0,
+                 parent: int = 0, decline: float = 1.0):
+        threshold *= decline
+        super().__init__(size_in, size_out, window_size, threshold, layers, activation_name, buds_params, level)
         
         self.level = level + 1
         self.parent_id = parent
@@ -285,10 +293,11 @@ class BuddingLayer(nn.Module):
                             size_in=self.buds_params['size_in'],
                             size_out=self.size_out, 
                             window_size=self.window_size,
-                            threshold=self.buds_params['threshold'] * self.buds_params['decline'],
+                            threshold=self.buds_params['threshold'],
+                            decline=self.buds_params['decline'],
                             layers=self.buds_params['layers'],
                             activation_name=self.buds_params['activation'],
-                            params=self.buds_params,
+                            buds_params=self.buds_params,
                             level=self.level,
                             parent=self.id)
                         
