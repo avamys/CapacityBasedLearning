@@ -1,3 +1,4 @@
+import os
 import torch
 import unittest
 import numpy as np
@@ -57,12 +58,31 @@ class TestDatasetGenerator(unittest.TestCase):
         self.assertEqual(self.generator.ids['noise'], 4)
         self.assertEqual(self.generator.ids['n_classes'], 5)
 
-    def test_generator(self):
+    def test_generator_base(self):
         ds = self.generator.get_base()
 
         self.assertIsInstance(ds, Dataset)
         self.assertEqual(ds.X.shape[0], 1000)
         self.assertEqual(ds.y.shape[0], 1000)
+
+    def test_generator(self):
+        path = f"data/processed/test/"
+        config = {
+            'n_numerical': {'min': 10, 'max': 30, 'dist': 10}
+        }
+        for feature, params in config.items():
+            self.generator.make_datasets(
+                path, feature, params['min'], params['max'], params['dist'])
+
+        created = os.listdir(path)
+        self.assertEqual(len(created), 3)
+        
+        ds = Dataset.load(path+'K0_F1_10.csv')
+        self.assertEqual(ds.cols, 20)
+        ds = Dataset.load(path+'K0_F1_20.csv')
+        self.assertEqual(ds.cols, 30)
+        ds = Dataset.load(path+'K0_F1_30.csv')
+        self.assertEqual(ds.cols, 40)
 
 
 if __name__ == '__main__':
