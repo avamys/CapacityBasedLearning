@@ -81,6 +81,12 @@ class Configurator():
 
         optimizer = get_optimizer(config['optimizer'])(model.parameters(), lr=config['learning_rate'])
 
+        if checkpoint_dir:
+            model_state, optimizer_state = torch.load(os.path.join(checkpoint_dir, "checkpoint"))
+            model.load_state_dict(model_state)
+            optimizer.load_state_dict(optimizer_state)
+
+        # Training loop
         for epoch in range(self.epochs):
 
             losses_train, losses_validate, accuracies = [], [], []
@@ -99,6 +105,11 @@ class Configurator():
                 loss_validate, accuracy = validation_step(model, self.criterion, X, y)
                 losses_validate.append(loss_validate)
                 accuracies.append(accuracy)
+
+            if epoch % 10 == 0:
+                with tune.checkpoint_dir(epoch) as checkpoint_dir:
+                    path = os.path.join(checkpoint_dir, "checkpoint")
+                    torch.save((model.state_dict(), optimizer.state_dict), path)
 
             tune.report(loss_train=np.mean(losses_train), loss_val=np.mean(losses_validate), accuracy=np.mean(accuracies))
 
