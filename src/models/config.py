@@ -2,6 +2,7 @@ import os
 import numpy as np
 import torch
 import ray
+import wandb
 
 from ray import tune
 from ray.tune.analysis import ExperimentAnalysis
@@ -58,6 +59,7 @@ class Configurator():
         ''' Performs full training of a specified model in specified number of epochs '''
 
         writer = SummaryWriter(log_dir="custom_logs")
+        run = wandb.init(project='test', reinit=True, config=config)
 
         train_dataloader = self.trainset.as_dataloader(batch_size=config['batch_size'])
         test_dataloader = self.testset.as_dataloader(batch_size=config['batch_size'])
@@ -78,6 +80,7 @@ class Configurator():
                 **config['model_params'])
 
         writer.add_graph(model, self.trainset.X)
+        wandb.watch(model)
 
         optimizer = get_optimizer(config['optimizer'])(model.parameters(), lr=config['learning_rate'])
 
@@ -97,7 +100,7 @@ class Configurator():
             
             if not self.baseline:
                 model.update_budding_layers()
-                # Logging
+                # Logging capacity parameters
                 logger.log_model_params(model, epoch)
 
             for X, y in test_dataloader:
@@ -111,8 +114,14 @@ class Configurator():
                     path = os.path.join(checkpoint_dir, "checkpoint")
                     torch.save((model.state_dict(), optimizer.state_dict), path)
 
-            tune.report(loss_train=np.mean(losses_train), loss_val=np.mean(losses_validate), accuracy=np.mean(accuracies))
+            wandb.log({'loss_train': np.mean(losses_train), 
+                       'loss_val': np.mean(losses_validate), 
+                       'accuracy': np.mean(accuracies)}, step=epoch)
+            tune.report(loss_train=np.mean(losses_train), 
+                        loss_val=np.mean(losses_validate), 
+                        accuracy=np.mean(accuracies))
 
+        run.finish()
         writer.close()
 
     def run(self, baseline: bool = False, dataset: Dataset = None, save_results: bool = False) -> ExperimentAnalysis:
