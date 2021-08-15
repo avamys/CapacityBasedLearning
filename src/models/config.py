@@ -22,7 +22,8 @@ LossFunction = Callable[[Tensor, Tensor], Tensor]
 Config = Dict[str, Union[int, float, str, List[int]]]
 
 class Configurator():
-    def __init__(self, config: Config, dataset: Dataset = None) -> None:
+    def __init__(self, config: Config, dataset: Dataset = None, 
+                 enable_wandb: bool = False, verbosity: int = 3) -> None:
         self.config = config
         self.name = self.config['name']
         self.parameters = self.config['parameters']
@@ -31,10 +32,14 @@ class Configurator():
         training_params = config['training']
         self.criterion = get_criterion(training_params['criterion'])()
         self.epochs = training_params['epochs']
+
         self.dataset = dataset
         if dataset:
             self.trainset, self.testset = self.dataset.split(training_params['test_size'])
+
         self.baseline = False
+        self.enable_wandb = enable_wandb
+        self.verbosity = verbosity
         self.model_init_params = []
 
     def _save_init_params(self, model: torch.nn.Module):
@@ -59,7 +64,8 @@ class Configurator():
         ''' Performs full training of a specified model in specified number of epochs '''
 
         writer = SummaryWriter(log_dir="custom_logs")
-        run = wandb.init(project='test', reinit=True, config=config)
+        if self.enable_wandb:
+            run = wandb.init(project='test', reinit=True, config=config)
 
         train_dataloader = self.trainset.as_dataloader(batch_size=config['batch_size'])
         test_dataloader = self.testset.as_dataloader(batch_size=config['batch_size'])
@@ -80,7 +86,8 @@ class Configurator():
                 **config['model_params'])
 
         writer.add_graph(model, self.trainset.X)
-        wandb.watch(model)
+        if self.enable_wandb:
+            wandb.watch(model)
 
         optimizer = get_optimizer(config['optimizer'])(model.parameters(), lr=config['learning_rate'])
 
@@ -99,8 +106,8 @@ class Configurator():
                 losses_train.append(loss_train)
             
             if not self.baseline:
+                # Operations to take place every epoch
                 model.update_budding_layers()
-                # Logging capacity parameters
                 logger.log_model_params(model, epoch)
 
             for X, y in test_dataloader:
@@ -114,14 +121,16 @@ class Configurator():
                     path = os.path.join(checkpoint_dir, "checkpoint")
                     torch.save((model.state_dict(), optimizer.state_dict), path)
 
-            wandb.log({'loss_train': np.mean(losses_train), 
-                       'loss_val': np.mean(losses_validate), 
-                       'accuracy': np.mean(accuracies)}, step=epoch)
+            if self.enable_wandb:
+                wandb.log({'loss_train': np.mean(losses_train), 
+                        'loss_val': np.mean(losses_validate), 
+                        'accuracy': np.mean(accuracies)}, step=epoch)
             tune.report(loss_train=np.mean(losses_train), 
                         loss_val=np.mean(losses_validate), 
                         accuracy=np.mean(accuracies))
-
-        run.finish()
+        
+        if self.enable_wandb:
+            run.finish()
         writer.close()
 
     def run(self, baseline: bool = False, dataset: Dataset = None, save_results: bool = False) -> ExperimentAnalysis:
@@ -137,7 +146,8 @@ class Configurator():
             self.parameters['model_params'] = set_params
             name = f'{self.name}_baseline'
 
-        result = tune.run(self.train, config=self.parameters, name=name, verbose=0, local_dir=self.local_dir)
+        result = tune.run(self.train, config=self.parameters, name=name, 
+                          verbose=self.verbosity, local_dir=self.local_dir)
         if save_results:
             df_result = result.results_df
             df_result.to_csv(self.local_dir+'/results.csv')

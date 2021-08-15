@@ -2,8 +2,9 @@ import wandb
 from src.models.network import NeuronBud, BuddingLayer
 
 class TBLogger():
-    def __init__(self, writer):
+    def __init__(self, writer, enable_wandb: bool = False):
         self.writer = writer
+        self.enable_wandb = enable_wandb
 
     def log_model_params(self, model, epoch):
         ''' Writes number of buds and values of lipschitz constants for layers
@@ -17,7 +18,8 @@ class TBLogger():
                     f'buds_layer{layer_id}', 
                     len(layer.buds), 
                     epoch)
-                wandb.log({f'buds_layer{layer_id}': len(layer.buds)}, step=epoch)
+                if self.enable_wandb:
+                    wandb.log({f'buds_layer{layer_id}': len(layer.buds)}, step=epoch)
 
                 # Log value of best lipschitz constants in level 0
                 lips = layer.get_lipschitz_constant()
@@ -30,12 +32,14 @@ class TBLogger():
 
         # Log total number of buds
         self.writer.add_scalar('total_n_buds', NeuronBud.counter, epoch)
-        wandb.log({'total_n_buds': NeuronBud.counter}, step=epoch)
 
         # Log values of lipschitz constants and number of buds in every layer
         log_model_lipschitz, log_model_buds = model.get_model_params()
-        wandb.log(log_model_lipschitz, step=epoch)
-        wandb.log(log_model_buds, step=epoch)
+
+        if self.enable_wandb:
+            wandb.log(log_model_lipschitz, step=epoch)
+            wandb.log(log_model_buds, step=epoch)
+            wandb.log({'total_n_buds': NeuronBud.counter}, step=epoch)
 
         for lipschitz_key in log_model_lipschitz:
             self.writer.add_scalars(
