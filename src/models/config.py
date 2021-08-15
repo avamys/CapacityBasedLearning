@@ -61,15 +61,18 @@ class Configurator():
         self.trainset, self.testset = self.dataset.split(test_size)
 
     def train(self, config: Config, checkpoint_dir: Optional[str] = None) -> None:
-        ''' Performs full training of a specified model in specified number of epochs '''
+        ''' Performs full training of a model with parameters specified in config dict '''
 
+        # Prepare loggers
         writer = SummaryWriter(log_dir="custom_logs")
         if self.enable_wandb:
             run = wandb.init(project='test', reinit=True, config=config)
 
+        # Load data
         train_dataloader = self.trainset.as_dataloader(batch_size=config['batch_size'])
         test_dataloader = self.testset.as_dataloader(batch_size=config['batch_size'])
 
+        # Create model or baseline
         if not self.baseline:
             logger = TBLogger(writer)
             forward_optim = True
@@ -77,7 +80,6 @@ class Configurator():
                 size_in=self.trainset.cols, 
                 size_out=self.trainset.targets, 
                 **config['model_params'])
-
         else:
             forward_optim = False
             model = Model(
@@ -85,12 +87,15 @@ class Configurator():
                 size_out=self.trainset.targets, 
                 **config['model_params'])
 
+        # Add model to loggers
         writer.add_graph(model, self.trainset.X)
         if self.enable_wandb:
             wandb.watch(model)
 
+        # Prepare optimizer
         optimizer = get_optimizer(config['optimizer'])(model.parameters(), lr=config['learning_rate'])
 
+        # Loading model checkpoint
         if checkpoint_dir:
             model_state, optimizer_state = torch.load(os.path.join(checkpoint_dir, "checkpoint"))
             model.load_state_dict(model_state)
@@ -116,27 +121,32 @@ class Configurator():
                 losses_validate.append(loss_validate)
                 accuracies.append(accuracy)
 
+            # Model checkpointing
             if epoch % 10 == 0:
                 with tune.checkpoint_dir(epoch) as checkpoint_dir:
                     path = os.path.join(checkpoint_dir, "checkpoint")
                     torch.save((model.state_dict(), optimizer.state_dict), path)
 
+            # Logging metrics
             if self.enable_wandb:
                 wandb.log({'loss_train': np.mean(losses_train), 
-                        'loss_val': np.mean(losses_validate), 
-                        'accuracy': np.mean(accuracies)}, step=epoch)
+                           'loss_val': np.mean(losses_validate), 
+                           'accuracy': np.mean(accuracies)}, step=epoch)
             tune.report(loss_train=np.mean(losses_train), 
                         loss_val=np.mean(losses_validate), 
                         accuracy=np.mean(accuracies))
         
+        # Close loggers
         if self.enable_wandb:
             run.finish()
         writer.close()
 
     def run(self, baseline: bool = False, dataset: Dataset = None, save_results: bool = False) -> ExperimentAnalysis:
+        ''' Runs Tune experiment '''
         if dataset:
             self.load_new_dataset(dataset)
 
+        # Temporarily reinitiate model params for baseline
         self.baseline = baseline
         name = self.name
         if baseline:
@@ -146,8 +156,11 @@ class Configurator():
             self.parameters['model_params'] = set_params
             name = f'{self.name}_baseline'
 
+        # Run tune experiment
         result = tune.run(self.train, config=self.parameters, name=name, 
                           verbose=self.verbosity, local_dir=self.local_dir)
+
+        # Save ending results as csv
         if save_results:
             df_result = result.results_df
             df_result.to_csv(self.local_dir+'/results.csv')
