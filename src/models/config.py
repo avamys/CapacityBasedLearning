@@ -14,7 +14,7 @@ from typing import Dict, List, Union, Callable, Optional
 from src.models.network import Model, CapacityModel
 from src.models.training import training_step, validation_step
 from src.visualization.visualize import TBLogger
-from src.models.utils import get_optimizer, get_criterion
+from src.models.utils import get_optimizer, get_criterion, get_metrics_dict
 from src.data.datasets import Dataset
 
 
@@ -32,6 +32,7 @@ class Configurator():
         training_params = config['training']
         self.criterion = get_criterion(training_params['criterion'])()
         self.epochs = training_params['epochs']
+        self.metrics = get_metrics_dict(training_params['metrics'])
 
         self.dataset = dataset
         if dataset:
@@ -104,11 +105,18 @@ class Configurator():
         # Training loop
         for epoch in range(self.epochs):
 
-            losses_train, losses_validate, accuracies = [], [], []
+            running_loss_train, running_loss_test = 0, 0
+            running_metrics_train = {metric: 0 for metric in self.metrics.keys()}
+            running_metrics_test = {metric: 0 for metric in self.metrics.keys()}
             for X, y in train_dataloader:
                 # Training step
-                loss_train = training_step(model, self.criterion, optimizer, X, y, forward_optim=forward_optim)
-                losses_train.append(loss_train)
+                loss_train, stats_train = training_step(
+                    model, self.criterion, optimizer, X, y, self.metrics, 
+                    forward_optim=forward_optim)
+                
+                running_loss_train += loss_train
+                for metric in self.metrics.keys():
+                    running_metrics_train[metric] += stats_train[metric]
             
             if not self.baseline:
                 # Operations to take place every epoch
@@ -117,9 +125,12 @@ class Configurator():
 
             for X, y in test_dataloader:
                 # Validation step
-                loss_validate, accuracy = validation_step(model, self.criterion, X, y)
-                losses_validate.append(loss_validate)
-                accuracies.append(accuracy)
+                loss_test, stats_test = validation_step(
+                    model, self.criterion, X, y, self.metrics)
+
+                running_loss_test += loss_test
+                for metric in self.metrics.keys():
+                    running_metrics_test[metric] += stats_test[metric]
 
             # Model checkpointing
             if epoch % 10 == 0:
@@ -128,13 +139,20 @@ class Configurator():
                     torch.save((model.state_dict(), optimizer.state_dict), path)
 
             # Logging metrics
+            epoch_loss_train = running_loss_train / len(train_dataloader)
+            epoch_loss_test = running_loss_test / len(test_dataloader)
+            epoch_metrics = dict()
+            for metric in self.metrics.keys():
+                epoch_metrics[f"{metric}_train"] = running_metrics_train[metric] / len(train_dataloader)
+                epoch_metrics[f"{metric}_test"] = running_metrics_test[metric] / len(test_dataloader)
+
+            tune.report(loss_train=epoch_loss_train,
+                        loss_test=epoch_loss_test, 
+                        **epoch_metrics)
             if self.enable_wandb:
-                wandb.log({'loss_train': np.mean(losses_train), 
-                           'loss_val': np.mean(losses_validate), 
-                           'accuracy': np.mean(accuracies)}, step=epoch)
-            tune.report(loss_train=np.mean(losses_train), 
-                        loss_val=np.mean(losses_validate), 
-                        accuracy=np.mean(accuracies))
+                wandb.log({'loss_train': epoch_loss_train, 
+                           'loss_test': epoch_loss_test}, step=epoch)
+                wandb.log(epoch_metrics, step=epoch)
         
         # Close loggers
         if self.enable_wandb:
