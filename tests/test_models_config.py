@@ -18,7 +18,7 @@ class TestConfigurator(unittest.TestCase):
         config_file = 'experiments/experiment_test.yaml'
         with open(config_file) as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
-        self.trainer = Configurator(config, ds)
+        self.trainer = Configurator(config, ds, verbosity=0)
 
     def test_init_params(self):
         params = self.trainer.parameters
@@ -42,7 +42,7 @@ class TestConfigurator(unittest.TestCase):
     def test_run(self):
         self.trainer.epochs = 2
         results = self.trainer.run()
-        best = results.get_best_config(metric="accuracy", mode="max")
+        best = results.get_best_config(metric="accuracy_test", mode="max")
 
         self.assertTrue('layers' in best['model_params'])
         self.assertTrue('window_size' in best['model_params'])
@@ -50,7 +50,7 @@ class TestConfigurator(unittest.TestCase):
     def test_run_baseline(self):
         self.trainer.epochs = 2
         results = self.trainer.run(baseline=True)
-        best = results.get_best_config(metric="accuracy", mode="max")
+        best = results.get_best_config(metric="accuracy_test", mode="max")
 
         self.assertTrue('layers' in best['model_params'])
         self.assertFalse('window_size' in best['model_params'])

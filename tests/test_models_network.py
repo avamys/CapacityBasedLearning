@@ -9,6 +9,7 @@ from src.models.network import NeuronBud, BuddingLayer
 class TestBuddingLayer(unittest.TestCase):
     def setUp(self):
         self.params = {
+            'learning_rate': 0.01,
             'size_in': 3,
             'threshold': 0.001,
             'decline': 1.0,
