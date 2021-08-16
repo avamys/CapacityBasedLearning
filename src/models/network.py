@@ -65,16 +65,45 @@ class LinearBud(nn.Module):
         return self.layers(x)
 
 
-class CapacityModel(nn.Module):
+class CapacityBase(nn.Module):
     ''' Base class for capacity-based models '''
+    def __init__(self, window_size: int, threshold: float):
+        super().__init__()
+
+        self.window_size = window_size
+        self.threshold = threshold
+        
+    def get_saturation(self, best_lipschitz):
+        if best_lipschitz is not None:
+            return (best_lipschitz > 0) & (best_lipschitz < self.threshold)
+        return None
+
+    def update_budding_layers(self):
+        for i, l in enumerate(self.layerlist):
+            if isinstance(l, BuddingLayer):
+                l.update_state()
+
+    def get_model_params(self):
+        ''' Aggregate all information from lower levels' layers and buds
+            (Used for logging)
+        '''
+        lower_lipschitz = dict()
+        lower_buds = dict()
+        for layer in self.layerlist:
+            if isinstance(layer, BuddingLayer):
+                lower_buds.update(layer.lower_buds)
+                lower_lipschitz.update(layer.lower_lipschitz)
+        return lower_lipschitz, lower_buds
+
+
+class CapacityModel(CapacityBase):
+    ''' Capacity model created based on provided config '''
     def __init__(self, size_in: int, size_out: int, window_size: int, 
                  threshold: float, layers: List[int], activation_name: str,
                  buds_params: Config, activation_out: str = None, level: int = 0):
-        super().__init__()
+        super().__init__(window_size, threshold)
 
         self.size_in = size_in
-        self.window_size = window_size
-        self.threshold = threshold
         self.activation = get_activation(activation_name)()
         if activation_out:
             self.activation_out = get_activation(activation_out)()
@@ -104,28 +133,6 @@ class CapacityModel(nn.Module):
             level=level, 
             idx=len(layers)))
 
-    def get_saturation(self, best_lipschitz):
-        if best_lipschitz is not None:
-            return (best_lipschitz > 0) & (best_lipschitz < self.threshold)
-        return None
-
-    def update_budding_layers(self):
-        for i, l in enumerate(self.layerlist):
-            if isinstance(l, BuddingLayer):
-                l.update_state()
-
-    def get_model_params(self):
-        ''' Aggregate all information from lower levels' layers and buds
-            (Used for logging)
-        '''
-        lower_lipschitz = dict()
-        lower_buds = dict()
-        for layer in self.layerlist:
-            if isinstance(layer, BuddingLayer):
-                lower_buds.update(layer.lower_buds)
-                lower_lipschitz.update(layer.lower_lipschitz)
-        return lower_lipschitz, lower_buds
-
     def forward(self, x, optim=None):
         x, lip = self.layerlist[0].forward(x, optim=optim)
         for i, l in enumerate(self.layerlist[1:]):
@@ -139,7 +146,7 @@ class CapacityModel(nn.Module):
         return self.activation_out(x)
 
 
-class NeuronBud(CapacityModel):
+class NeuronBud(CapacityBase):
     ''' Parametrized Bud model with budding layers '''
     counter = 0
     def __init__(self, size_in: int, size_out: int, window_size: int, 
@@ -147,7 +154,32 @@ class NeuronBud(CapacityModel):
                  activation_name: str, buds_params: Config, level: int = 0,
                  parent: int = 0, decline: float = 1.0):
         threshold *= decline
-        super().__init__(size_in, size_out, window_size, threshold, layers, activation_name, buds_params, level)
+        super().__init__(window_size, threshold)
+
+        self.size_in = size_in
+        self.activation = get_activation(activation_name)()
+        self.layerlist = nn.ModuleList()
+
+        n_in = self.size_in
+
+        # Create feedforward network with budding layers
+        for layer_id, layer in enumerate(layers):
+            self.layerlist.append(BuddingLayer(
+                size_in=n_in,
+                size_out=layer,
+                window_size=window_size,
+                buds_params=buds_params, 
+                level=level, 
+                idx=layer_id))
+            n_in = layer
+
+        self.layerlist.append(BuddingLayer(
+            size_in=layers[-1],
+            size_out=size_out,
+            window_size=window_size,
+            buds_params=buds_params, 
+            level=level, 
+            idx=len(layers)))
         
         self.level = level + 1
         self.parent_id = parent
@@ -155,19 +187,20 @@ class NeuronBud(CapacityModel):
         NeuronBud.counter += 1
 
         self.weight = torch.ones(1, self.size_in) / self.size_in
-        
+
     def get_layers_params(self):
         ''' Aggregate parameters of every budding layer '''
         lipschitz_consts = dict()
         buds_grown = dict()
         for idx, layer in enumerate(self.layerlist):
-            buds_grown[f'{self.level}_{self.parent_id}_{self.id}_{idx}_buds'] = len(layer.buds)
-            buds_grown.update(layer.lower_buds)
-            lips = layer.get_lipschitz_constant()
-            if lips is not None:
-                keys = [str(i) for i in range(lips.shape[0])]
-                lipschitz_consts[f'{self.level}_{self.parent_id}_{self.id}_{idx}_lipschitz'] = dict(zip(keys, lips))
-            lipschitz_consts.update(layer.lower_lipschitz)
+            if isinstance(layer, BuddingLayer):
+                buds_grown[f'{self.level}_{self.parent_id}_{self.id}_{idx}_buds'] = len(layer.buds)
+                buds_grown.update(layer.lower_buds)
+                lips = layer.get_lipschitz_constant()
+                if lips is not None:
+                    keys = [str(i) for i in range(lips.shape[0])]
+                    lipschitz_consts[f'{self.level}_{self.parent_id}_{self.id}_{idx}_lipschitz'] = dict(zip(keys, lips))
+                lipschitz_consts.update(layer.lower_lipschitz)
 
         return lipschitz_consts, buds_grown
 
@@ -178,9 +211,12 @@ class NeuronBud(CapacityModel):
         # Default forward pass
         x, lip = self.layerlist[0].forward(x, optim=optim)
         for i, l in enumerate(self.layerlist[1:]):
-            x = self.activation(x)
-            saturation = self.get_saturation(lip)
-            x, lip = self.layerlist[i+1].forward(x, saturation, optim)
+            if isinstance(l, BuddingLayer):
+                x = self.activation(x)
+                saturation = self.get_saturation(lip)
+                x, lip = self.layerlist[i+1].forward(x, saturation, optim)
+            else:
+                x = self.layerlist[i+1].forward(x)
 
         return x
 
@@ -264,8 +300,8 @@ class BuddingLayer(nn.Module):
             self.__update_lipschitz_cache() # update lipschitz deque with current weights
             self.__update_cache() # update weights deque with current weights
 
-        for key in self.buds:
-            self.buds[key].update_budding_layers()
+            for key in self.buds:
+                self.buds[key].update_budding_layers()
 
     def forward(self, x: Tensor, saturated: Tensor = None, optim=None) -> Tuple:
         ''' saturated tensor should be provided from the previous layer
@@ -303,7 +339,9 @@ class BuddingLayer(nn.Module):
                         
                         # Add new parameters to optimizer
                         if optim is not None:
-                            optim.add_param_group({'params': self.buds[str(new_bud)].parameters()})
+                            optim.add_param_group(
+                                {'params': self.buds[str(new_bud)].parameters(), 
+                                 'lr': self.buds_params['learning_rate']})
                     
                     self.saturated_neurons = sat
 
