@@ -72,6 +72,7 @@ class Configurator():
         # Load data
         train_dataloader = self.trainset.as_dataloader(batch_size=config['batch_size'])
         test_dataloader = self.testset.as_dataloader(batch_size=config['batch_size'])
+        metric_kwargs = {'num_classes': self.trainset.targets, 'average': 'weighted'}
 
         # Create model or baseline
         if not self.baseline:
@@ -112,7 +113,7 @@ class Configurator():
                 # Training step
                 loss_train, stats_train = training_step(
                     model, self.criterion, optimizer, X, y, self.metrics, 
-                    forward_optim=forward_optim)
+                    metric_kwargs, forward_optim=forward_optim)
                 
                 running_loss_train += loss_train
                 for metric in self.metrics.keys():
@@ -126,7 +127,7 @@ class Configurator():
             for X, y in test_dataloader:
                 # Validation step
                 loss_test, stats_test = validation_step(
-                    model, self.criterion, X, y, self.metrics)
+                    model, self.criterion, X, y, self.metrics, metric_kwargs)
 
                 running_loss_test += loss_test
                 for metric in self.metrics.keys():
@@ -175,8 +176,10 @@ class Configurator():
             name = f'{self.name}_baseline'
 
         # Run tune experiment
+        kwargs = self.config['kwargs'] if 'kwargs' in self.config else {}
         result = tune.run(self.train, config=self.parameters, name=name, 
-                          verbose=self.verbosity, local_dir=self.local_dir)
+                          verbose=self.verbosity, local_dir=self.local_dir, 
+                          **kwargs)
 
         # Save ending results as csv
         if save_results:

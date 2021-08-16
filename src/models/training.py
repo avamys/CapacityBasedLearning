@@ -12,8 +12,9 @@ Metrics = Dict[str, Callable[[Tensor, Tensor], Number]]
 
 def training_step(model: Module, criterion: LossFunction, 
                   optimizer: Optimizer, features: Tensor, target: Tensor, 
-                  metrics: Metrics, forward_optim: bool = False):
-    ''' Performs single training step and returns loss '''
+                  metrics: Metrics, metric_kwargs: dict = {}, 
+                  forward_optim: bool = False):
+    ''' Performs single training step and returns loss and dict of computed metrics '''
 
     model.train()
 
@@ -30,13 +31,14 @@ def training_step(model: Module, criterion: LossFunction,
 
     computed_metrics = dict()
     for metric, fnc in metrics.items():
-        computed_metrics[metric] = fnc(target_pred, target).item()
+        computed_metrics[metric] = fnc(target_pred, target, **metric_kwargs).item()
 
     return loss.item(), computed_metrics
 
 def validation_step(model: Module, criterion: LossFunction, features: Tensor, 
-                    target: Tensor, metrics: Metrics):
-    ''' Performs single validations step and returns loss and accuracy '''
+                    target: Tensor, metrics: Metrics, 
+                    metric_kwargs: dict = {}):
+    ''' Performs single validation step and returns loss and dict of computed metrics '''
 
     model.eval()
     with torch.no_grad():
@@ -45,6 +47,6 @@ def validation_step(model: Module, criterion: LossFunction, features: Tensor,
 
     computed_metrics = dict()
     for metric, fnc in metrics.items():
-        computed_metrics[metric] = fnc(target_val, target).item()
+        computed_metrics[metric] = fnc(target_val, target, **metric_kwargs).item()
 
     return loss.item(), computed_metrics
