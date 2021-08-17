@@ -32,7 +32,7 @@ class Configurator():
         training_params = config['training']
         self.criterion = get_criterion(training_params['criterion'])()
         self.epochs = training_params['epochs']
-        self.metrics = get_metrics_dict(training_params['metrics'])
+        self.metrics = training_params['metrics']
 
         self.dataset = dataset
         if dataset:
@@ -72,7 +72,12 @@ class Configurator():
         # Load data
         train_dataloader = self.trainset.as_dataloader(batch_size=config['batch_size'])
         test_dataloader = self.testset.as_dataloader(batch_size=config['batch_size'])
-        metric_kwargs = {'num_classes': self.trainset.targets, 'average': 'weighted'}
+
+        # Initialize metrics modules
+        metric_kwargs = {'num_classes': self.trainset.targets,
+                         'average': 'weighted',
+                         'compute_on_step': False}
+        train_metrics, test_metrics = get_metrics_dict(self.metrics, metric_kwargs)
 
         # Create model or baseline
         if not self.baseline:
@@ -107,17 +112,12 @@ class Configurator():
         for epoch in range(self.epochs):
 
             running_loss_train, running_loss_test = 0, 0
-            running_metrics_train = {metric: 0 for metric in self.metrics.keys()}
-            running_metrics_test = {metric: 0 for metric in self.metrics.keys()}
             for X, y in train_dataloader:
                 # Training step
-                loss_train, stats_train = training_step(
-                    model, self.criterion, optimizer, X, y, self.metrics, 
-                    metric_kwargs, forward_optim=forward_optim)
-                
+                loss_train = training_step(
+                    model, self.criterion, optimizer, X, y, train_metrics, 
+                    forward_optim=forward_optim)
                 running_loss_train += loss_train
-                for metric in self.metrics.keys():
-                    running_metrics_train[metric] += stats_train[metric]
             
             if not self.baseline:
                 # Operations to take place every epoch
@@ -126,12 +126,8 @@ class Configurator():
 
             for X, y in test_dataloader:
                 # Validation step
-                loss_test, stats_test = validation_step(
-                    model, self.criterion, X, y, self.metrics, metric_kwargs)
-
+                loss_test = validation_step(model, self.criterion, X, y, test_metrics)
                 running_loss_test += loss_test
-                for metric in self.metrics.keys():
-                    running_metrics_test[metric] += stats_test[metric]
 
             # Model checkpointing
             if epoch % 10 == 0:
@@ -142,18 +138,20 @@ class Configurator():
             # Logging metrics
             epoch_loss_train = running_loss_train / len(train_dataloader)
             epoch_loss_test = running_loss_test / len(test_dataloader)
-            epoch_metrics = dict()
-            for metric in self.metrics.keys():
-                epoch_metrics[f"{metric}_train"] = running_metrics_train[metric] / len(train_dataloader)
-                epoch_metrics[f"{metric}_test"] = running_metrics_test[metric] / len(test_dataloader)
+            epoch_metrics_train = {k: v.item() for k, v in train_metrics.compute().items()}
+            epoch_metrics_test = {k: v.item() for k, v in test_metrics.compute().items()}
+            train_metrics.reset()
+            test_metrics.reset()
 
             tune.report(loss_train=epoch_loss_train,
                         loss_test=epoch_loss_test, 
-                        **epoch_metrics)
+                        **epoch_metrics_train,
+                        **epoch_metrics_test)
             if self.enable_wandb:
                 wandb.log({'loss_train': epoch_loss_train, 
                            'loss_test': epoch_loss_test}, step=epoch)
-                wandb.log(epoch_metrics, step=epoch)
+                wandb.log(epoch_metrics_train, step=epoch)
+                wandb.log(epoch_metrics_test, step=epoch)
         
         # Close loggers
         if self.enable_wandb:

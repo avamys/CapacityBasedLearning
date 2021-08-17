@@ -12,9 +12,8 @@ Metrics = Dict[str, Callable[[Tensor, Tensor], Number]]
 
 def training_step(model: Module, criterion: LossFunction, 
                   optimizer: Optimizer, features: Tensor, target: Tensor, 
-                  metrics: Metrics, metric_kwargs: dict = {}, 
-                  forward_optim: bool = False):
-    ''' Performs single training step and returns loss and dict of computed metrics '''
+                  metrics: Metrics, forward_optim: bool = False):
+    ''' Performs single training step, computes metrics and returns loss '''
 
     model.train()
 
@@ -29,24 +28,19 @@ def training_step(model: Module, criterion: LossFunction,
     loss.backward()
     optimizer.step()
 
-    computed_metrics = dict()
-    for metric, fnc in metrics.items():
-        computed_metrics[metric] = fnc(target_pred, target, **metric_kwargs).item()
+    metrics(target_pred, target)
 
-    return loss.item(), computed_metrics
+    return loss.item()
 
 def validation_step(model: Module, criterion: LossFunction, features: Tensor, 
-                    target: Tensor, metrics: Metrics, 
-                    metric_kwargs: dict = {}):
-    ''' Performs single validation step and returns loss and dict of computed metrics '''
+                    target: Tensor, metrics: Metrics):
+    ''' Performs single validation step, computes metrics and returns loss '''
 
     model.eval()
     with torch.no_grad():
         target_val = model.forward(features)
         loss = criterion(target_val, target)
 
-    computed_metrics = dict()
-    for metric, fnc in metrics.items():
-        computed_metrics[metric] = fnc(target_val, target, **metric_kwargs).item()
+    metrics(target_val, target)
 
-    return loss.item(), computed_metrics
+    return loss.item()

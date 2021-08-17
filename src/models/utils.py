@@ -3,7 +3,7 @@ import random
 import torch
 import torch.nn as nn
 import numpy as np
-import torchmetrics.functional as metrics
+import torchmetrics
 
 from typing import Tuple
 
@@ -40,19 +40,25 @@ def get_criterion(criterion: str):
 
     return criterions[criterion]
 
-def get_metrics_dict(metric_list: Tuple[str]):
+def get_metrics_dict(metric_list: Tuple[str], metric_settings):
     ''' Returns metrics dict in format metric_name: metric_function '''
 
     classification_metrics = {
-        'accuracy': metrics.accuracy,
-        'average_precision': metrics.average_precision,
-        'f1': metrics.f1,
-        'precision': metrics.precision,
-        'recall': metrics.recall,
-        'roc': metrics.roc
+        'accuracy': torchmetrics.Accuracy,
+        'average_precision': torchmetrics.AveragePrecision,
+        'f1': torchmetrics.F1,
+        'precision': torchmetrics.Precision,
+        'recall': torchmetrics.Recall,
+        'roc': torchmetrics.ROC
     }
 
-    return {metric: classification_metrics[metric] for metric in metric_list}
+    metrics = [classification_metrics[metric](**metric_settings) for metric in metric_list]
+    collection = torchmetrics.MetricCollection(metrics)
+
+    train_metrics = collection.clone(postfix="_train")
+    test_metrics = collection.clone(postfix="_test")
+
+    return train_metrics, test_metrics
 
 def seed_everything(seed: int) -> None:
     os.environ['PYTHONHASHSEED'] = str(seed)
