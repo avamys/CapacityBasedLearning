@@ -13,7 +13,7 @@ from src.models.config import Configurator
 class TestConfigurator(unittest.TestCase):
     def setUp(self):
         X = np.random.rand(256,5)
-        y = np.random.randint(0, 1, 256)
+        y = np.random.randint(0, 2, 256)
         ds = Dataset(X, y)
         config_file = 'experiments/experiment_test.yaml'
         with open(config_file) as f:
@@ -42,7 +42,7 @@ class TestConfigurator(unittest.TestCase):
     def test_run(self):
         self.trainer.epochs = 2
         results = self.trainer.run()
-        best = results.get_best_config(metric="accuracy_test", mode="max")
+        best = results.get_best_config(metric="Accuracy_test", mode="max")
 
         self.assertTrue('layers' in best['model_params'])
         self.assertTrue('window_size' in best['model_params'])
@@ -50,7 +50,7 @@ class TestConfigurator(unittest.TestCase):
     def test_run_baseline(self):
         self.trainer.epochs = 2
         results = self.trainer.run(baseline=True)
-        best = results.get_best_config(metric="accuracy_test", mode="max")
+        best = results.get_best_config(metric="Accuracy_test", mode="max")
 
         self.assertTrue('layers' in best['model_params'])
         self.assertFalse('window_size' in best['model_params'])
