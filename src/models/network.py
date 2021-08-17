@@ -221,13 +221,13 @@ class NeuronBud(CapacityBase):
         return x
 
 
-class BuddingLayer(nn.Module):
+class BuddingLayer(nn.Linear):
     ''' Budding layer that stores and activates the buds for saturated 
         neurons.
     '''
     def __init__(self, size_in: int, size_out: int, window_size: int, buds_params: Config, 
                  compute_lipschitz: bool = True, bias: bool = True, level: int = 0, idx: int = 0):
-        super().__init__()
+        super().__init__(size_in, size_out, bias)
 
         self.window_size = window_size
         self.lipschitz_size = int(binom(self.window_size+1, 2))
@@ -246,27 +246,6 @@ class BuddingLayer(nn.Module):
         self.lower_lipschitz = dict()
         self.lower_buds = dict()
 
-        self.weight = nn.Parameter(Tensor(size_out, size_in))
-        if bias:
-            self.bias = nn.Parameter(Tensor(size_out))
-        else:
-            self.register_parameter('bias', None)
-        self.__reset_parameters()
-
-    def __reset_parameters(self) -> None:
-        ''' Weights and biases initialization same as in basic nn.Linear '''
-        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
-        if self.bias is not None:
-            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
-            bound = 1 / math.sqrt(fan_in)
-            init.uniform_(self.bias, -bound, bound)
-
-    def __update_cache(self) -> None:
-        ''' Adds weights to the cache '''
-        current_weights = self.state_dict()['weight']
-
-        self.weights_window.append(current_weights.clone().detach())
-
     def __update_lipschitz_cache(self) -> None:
         ''' Adds lipschitz constants computed for a current epoch's weights 
             to the cache.
@@ -278,6 +257,8 @@ class BuddingLayer(nn.Module):
             dist_points = self.window_size - epoch_id
 
             self.lipshitz_constants.append(dist_func / dist_points)
+
+        self.weights_window.append(current_weights.clone().detach())
 
     def get_lipschitz_constant(self) -> Tensor:
         ''' Computes current best lipshitz constant or returns None if the 
@@ -298,7 +279,6 @@ class BuddingLayer(nn.Module):
     def update_state(self):
         if self.training:
             self.__update_lipschitz_cache() # update lipschitz deque with current weights
-            self.__update_cache() # update weights deque with current weights
 
             for key in self.buds:
                 self.buds[key].update_budding_layers()
