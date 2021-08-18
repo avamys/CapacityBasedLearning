@@ -37,8 +37,18 @@ class TestTraining(unittest.TestCase):
         loss1 = training_step(self.model, criterion, optimizer, X_t, y_t, self.metric)
         loss2 = training_step(self.model, criterion, optimizer, X_t, y_t, self.metric)
         
-        # self.assertNotAlmostEqual(loss1, loss2)
         self.assertNotEqual(loss1, loss2)
+
+    def test_validation_step(self):
+        X_t = torch.Tensor(self.X)
+        y_t = torch.LongTensor(self.y)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = Adam(self.model.parameters(), lr=0.01)
+
+        loss1 = validation_step(self.model, criterion, X_t, y_t, self.metric)
+        loss2 = validation_step(self.model, criterion, X_t, y_t, self.metric)
+        
+        self.assertEqual(loss1, loss2)
 
 if __name__ == '__main__':
     unittest.main()
