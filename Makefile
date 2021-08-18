@@ -46,6 +46,11 @@ data: requirements
 	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/mice.xls data/processed/
 	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/anneal.data data/processed/
 
+## Make single dataset
+get_dataset:
+	@echo ">>> Downloading data from UCI."
+	$(PYTHON_INTERPRETER) src/data/make_dataset.py extreme data/raw data/processed/
+
 ## Data preprocessing
 preprocessing: 
 	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/adult.data data/processed/
@@ -56,7 +61,12 @@ preprocessing:
 ## Train Model
 train:
 	@echo ">>> Training model"
-	$(PYTHON_INTERPRETER) src/models/train_model.py data/processed/adult_features.csv data/processed/adult_target.csv experiments/experiment_test.yaml
+	$(PYTHON_INTERPRETER) src/models/train_model.py data/processed/extreme.csv experiments/experiment_test.yaml
+
+## Train with data generation
+tune:
+	@echo ">>> Training model with data generation"
+	$(PYTHON_INTERPRETER) src/models/tune_model.py experiments/experiment_test.yaml -all -b
 
 ## Run tests
 run_tests:

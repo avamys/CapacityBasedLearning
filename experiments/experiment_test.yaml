@@ -1,13 +1,13 @@
-name: exp-test
+name: expo-test
 dir: runs
 
 training:
   test_size: 0.3
-  epochs: 50
+  epochs: 5
   criterion: 'cross-entropy'
+  metrics: ['accuracy', 'f1']
 
 parameters:
-  model: 'capacity'
   optimizer: 'adam'
   learning_rate: 0.01
   batch_size: 64
@@ -19,13 +19,31 @@ parameters:
       10
     ]
     activation_name: 'relu'
+    activation_out: 'relu'
     window_size: 5
     threshold: 0.01
 
 # Buds parameters
     buds_params:
+      learning_rate: 0.01
       size_in: 3
       threshold: 0.01
       decline: 0.1
       layers: [3, 3]
       activation: 'relu'
+
+# Base dataset parameters
+base_dataset:
+  n_samples: 1000
+  n_numerical: 10
+  n_categorical: 5 
+  n_binary: 5
+  noise: 0.0
+  n_classes: 2
+
+# Datasets parameters
+datasets:
+  n_numerical: 
+    min: 10
+    max: 30
+    dist: 10
