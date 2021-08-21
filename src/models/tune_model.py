@@ -13,7 +13,7 @@ from dotenv import find_dotenv, load_dotenv
 @click.command()
 @click.argument('config_file', type=click.Path())
 @click.option('--dataset', default=None, type=click.Path())
-@click.option('--all-datasets', '-all', is_flag=True)
+@click.option('--generate', '-g', is_flag=True)
 @click.option('--baseline', '-b', is_flag=True)
 def main(config_file, dataset, all_datasets, baseline):
     """ Runs model training scripts to create and train models on prepared
@@ -38,7 +38,7 @@ def main(config_file, dataset, all_datasets, baseline):
         if baseline:
             trainer.run(baseline=True, save_results=True)
 
-    elif all_datasets:
+    elif generate:
         dg = DatasetGenerator(**config['base_dataset'], random_state=random_state)
         path = dg.generate("data/processed", config)
         logger.info('all datasets created')
