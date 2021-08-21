@@ -3,7 +3,7 @@ dir: runs
 
 training:
   test_size: 0.3
-  epochs: 5
+  epochs: 50
   criterion: 'cross-entropy'
   metrics: ['accuracy', 'f1']
 
@@ -47,3 +47,7 @@ datasets:
     min: 10
     max: 30
     dist: 10
+
+# Ray experiment keyword arguments
+kwargs:
+  time_budget_s: 600
