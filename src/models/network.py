@@ -3,7 +3,8 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.nn.init as init
+import torch.nn.utils.weight_norm as wn
+from torch.nn.parameter import Parameter
 from torch import Tensor
 
 from src.models.utils import get_activation
@@ -186,7 +187,7 @@ class NeuronBud(CapacityBase):
         self.id = NeuronBud.counter
         NeuronBud.counter += 1
 
-        self.weight = torch.ones(1, self.size_in) / self.size_in
+        self.weight = Parameter(torch.ones(1, self.size_in) / self.size_in)
 
     def get_layers_params(self):
         ''' Aggregate parameters of every budding layer '''
@@ -194,13 +195,15 @@ class NeuronBud(CapacityBase):
         buds_grown = dict()
         for idx, layer in enumerate(self.layerlist):
             if isinstance(layer, BuddingLayer):
-                buds_grown[f'{self.level}_{self.parent_id}_{self.id}_{idx}_buds'] = len(layer.buds)
-                buds_grown.update(layer.lower_buds)
-                lips = layer.get_lipschitz_constant()
-                if lips is not None:
-                    keys = [str(i) for i in range(lips.shape[0])]
-                    lipschitz_consts[f'{self.level}_{self.parent_id}_{self.id}_{idx}_lipschitz'] = dict(zip(keys, lips))
-                lipschitz_consts.update(layer.lower_lipschitz)
+                if idx != 0:
+                    buds_grown[f'{self.level}_{self.parent_id}_{self.id}_{idx}_buds'] = len(layer.buds)
+                    buds_grown.update(layer.lower_buds)
+                elif idx != len(self.layerlist)-1:
+                    lips = layer.get_lipschitz_constant()
+                    if lips is not None:
+                        keys = [str(i) for i in range(lips.shape[0])]
+                        lipschitz_consts[f'{self.level}_{self.parent_id}_{self.id}_{idx}_lipschitz'] = dict(zip(keys, lips))
+                    lipschitz_consts.update(layer.lower_lipschitz)
 
         return lipschitz_consts, buds_grown
 
