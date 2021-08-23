@@ -23,11 +23,12 @@ Config = Dict[str, Union[int, float, str, List[int]]]
 
 class Configurator():
     def __init__(self, config: Config, dataset: Dataset = None, 
-                 enable_wandb: bool = False, verbosity: int = 3) -> None:
+                 enable_wandb: bool = False, verbosity: int = 3, random_state: int = None) -> None:
         self.config = config
         self.name = self.config['name']
         self.parameters = self.config['parameters']
         self.local_dir = self.config['dir']
+        self.random_state = random_state
 
         training_params = config['training']
         self.criterion = get_criterion(training_params['criterion'])()
@@ -36,7 +37,7 @@ class Configurator():
 
         self.dataset = dataset
         if dataset:
-            self.trainset, self.testset = self.dataset.split(training_params['test_size'])
+            self.trainset, self.testset = self.dataset.split(training_params['test_size'], random_state=random_state)
 
         self.baseline = False
         self.enable_wandb = enable_wandb
@@ -59,7 +60,7 @@ class Configurator():
     def load_new_dataset(self, dataset):
         self.dataset = dataset
         test_size = self.config['training']['test_size']
-        self.trainset, self.testset = self.dataset.split(test_size)
+        self.trainset, self.testset = self.dataset.split(test_size, self.random_state)
 
     def train(self, config: Config, checkpoint_dir: Optional[str] = None) -> None:
         ''' Performs full training of a model with parameters specified in config dict '''
@@ -67,7 +68,7 @@ class Configurator():
         # Prepare loggers
         writer = SummaryWriter(log_dir="custom_logs")
         if self.enable_wandb:
-            run = wandb.init(project='test', reinit=True, config=config)
+            run = wandb.init(project='capacity-dataset-experiment', reinit=True, config=config)
 
         # Load data
         train_dataloader = self.trainset.as_dataloader(batch_size=config['batch_size'])
@@ -168,7 +169,8 @@ class Configurator():
         name = self.name
         if baseline:
             baseline_keys = ('layers', 'activation_name', 'activation_out')
-            set_params = {key: self.parameters['model_params'][key] for key in baseline_keys}
+            set_params = {key: self.parameters['model_params'][key] for key in baseline_keys if key in self.parameters['model_params'].keys()}
+            set_params['layers'] = [layer for layer in set_params['layers'] for _ in range(2)]
             params_cache = self.parameters['model_params']
             self.parameters['model_params'] = set_params
             name = f'{self.name}_baseline'
@@ -182,7 +184,7 @@ class Configurator():
         # Save ending results as csv
         if save_results:
             df_result = result.results_df
-            df_result.to_csv(self.local_dir+'/results.csv')
+            df_result.to_csv(f'{self.local_dir}/{self.name}/results.csv')
 
         if baseline:
             self.parameters['model_params'] = params_cache
