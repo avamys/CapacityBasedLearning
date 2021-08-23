@@ -18,12 +18,11 @@ class Model(nn.Module):
     ''' Simple parametrized network '''
     
     def __init__(self, size_in: int, size_out: int, layers: List[int],
-                 activation_name: str, activation_out: str):
+                 activation_name: str, activation_out: str = None):
 
         super().__init__()
 
         activation_method = get_activation(activation_name)
-        activation_out = get_activation(activation_out)
         layerlist = []
         n_in = size_in
 
@@ -32,7 +31,8 @@ class Model(nn.Module):
             layerlist.append(activation_method())
             n_in = layer
         layerlist.append(nn.Linear(layers[-1], size_out))
-        layerlist.append(activation_out())
+        if activation_out:
+            layerlist.append(get_activation(activation_out)())
 
         self.layers = nn.Sequential(*layerlist)
 
@@ -109,7 +109,7 @@ class CapacityModel(CapacityBase):
         if activation_out:
             self.activation_out = get_activation(activation_out)()
         else:
-            self.activation_out = self.activation
+            self.activation_out = None
 
         self.layerlist = nn.ModuleList()
 
@@ -144,7 +144,7 @@ class CapacityModel(CapacityBase):
             else:
                 x = self.layerlist[i+1].forward(x)
 
-        return self.activation_out(x)
+        return self.activation_out(x) if self.activation_out else x
 
 
 class NeuronBud(CapacityBase):
