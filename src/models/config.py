@@ -23,11 +23,14 @@ Config = Dict[str, Union[int, float, str, List[int]]]
 
 class Configurator():
     def __init__(self, config: Config, dataset: Dataset = None, 
-                 enable_wandb: bool = False, verbosity: int = 3, random_state: int = None) -> None:
+                 enable_wandb: bool = False, verbosity: int = 3, 
+                 dataset_id: str = None, project: str = 'capacity-project', 
+                 random_state: int = None) -> None:
         self.config = config
         self.name = self.config['name']
         self.parameters = self.config['parameters']
         self.local_dir = self.config['dir']
+        self.project = project
         self.random_state = random_state
 
         training_params = config['training']
@@ -36,6 +39,7 @@ class Configurator():
         self.metrics = training_params['metrics']
 
         self.dataset = dataset
+        self.parameters['dataset'] = dataset_id
         if dataset:
             self.trainset, self.testset = self.dataset.split(training_params['test_size'], random_state=random_state)
 
@@ -43,6 +47,7 @@ class Configurator():
         self.enable_wandb = enable_wandb
         self.verbosity = verbosity
         self.model_init_params = []
+        ray.init(include_dashboard=False, configure_logging=False, object_store_memory=10**9)
 
     def _save_init_params(self, model: torch.nn.Module):
         self.model_init_params = []
@@ -57,8 +62,9 @@ class Configurator():
             if layer.bias is not None:
                 layer.bias.data = self.model_init_params[idx]['bias']
 
-    def load_new_dataset(self, dataset):
+    def load_new_dataset(self, dataset: Dataset, dataset_id: str = None) -> None:
         self.dataset = dataset
+        self.parameters['dataset'] = dataset_id
         test_size = self.config['training']['test_size']
         self.trainset, self.testset = self.dataset.split(test_size, self.random_state)
 
@@ -68,7 +74,7 @@ class Configurator():
         # Prepare loggers
         writer = SummaryWriter(log_dir="custom_logs")
         if self.enable_wandb:
-            run = wandb.init(project='capacity-dataset-experiment', reinit=True, config=config)
+            run = wandb.init(project=self.project, reinit=True, config=config)
 
         # Load data
         train_dataloader = self.trainset.as_dataloader(batch_size=config['batch_size'])
@@ -82,7 +88,7 @@ class Configurator():
 
         # Create model or baseline
         if not self.baseline:
-            logger = TBLogger(writer)
+            logger = TBLogger(writer, enable_wandb=self.enable_wandb)
             forward_optim = True
             model = CapacityModel(
                 size_in=self.trainset.cols, 
@@ -159,10 +165,11 @@ class Configurator():
             run.finish()
         writer.close()
 
-    def run(self, baseline: bool = False, dataset: Dataset = None, save_results: bool = False) -> ExperimentAnalysis:
+    def run(self, baseline: bool = False, dataset: Dataset = None, 
+            dataset_id: str = None, save_results: bool = False) -> ExperimentAnalysis:
         ''' Runs Tune experiment '''
         if dataset:
-            self.load_new_dataset(dataset)
+            self.load_new_dataset(dataset, dataset_id)
 
         # Temporarily reinitiate model params for baseline
         self.baseline = baseline
@@ -178,7 +185,7 @@ class Configurator():
         # Run tune experiment
         kwargs = self.config['kwargs'] if 'kwargs' in self.config else {}
         result = tune.run(self.train, config=self.parameters, name=name, 
-                          verbose=self.verbosity, local_dir=self.local_dir, 
+                          verbose=self.verbosity, local_dir=self.local_dir,
                           **kwargs)
 
         # Save ending results as csv
