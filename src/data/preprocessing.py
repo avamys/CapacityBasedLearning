@@ -48,6 +48,9 @@ class DataPreprocessor:
                 ('categorical', categorical_pipeline, categorical)])
 
         X = preprocessor.fit_transform(X)
+        
+        if type(X) != np.ndarray:
+            X = X.toarray()
 
         # Label encoding for potential target variables
         le = LabelEncoder()

@@ -18,8 +18,6 @@ class TBLogger():
                     f'buds_layer{layer_id}', 
                     len(layer.buds), 
                     epoch)
-                if self.enable_wandb:
-                    wandb.log({f'buds_layer{layer_id}': len(layer.buds)}, step=epoch)
 
                 # Log value of best lipschitz constants in level 0
                 lips = layer.get_lipschitz_constant()
@@ -37,8 +35,6 @@ class TBLogger():
         log_model_lipschitz, log_model_buds = model.get_model_params()
 
         if self.enable_wandb:
-            wandb.log(log_model_lipschitz, step=epoch)
-            wandb.log(log_model_buds, step=epoch)
             wandb.log({'total_n_buds': NeuronBud.counter}, step=epoch)
 
         for lipschitz_key in log_model_lipschitz:
@@ -46,11 +42,9 @@ class TBLogger():
                 lipschitz_key,
                 log_model_lipschitz[lipschitz_key], 
                 epoch)
-            # wandb.log({lipschitz_key: log_model_lipschitz[lipschitz_key]})
 
         for bud_key in log_model_buds:
             self.writer.add_scalar(
                 bud_key,
                 log_model_buds[bud_key],
                 epoch)
-            # wandb.log({bud_key: log_model_buds[bud_key]})

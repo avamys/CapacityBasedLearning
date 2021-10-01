@@ -256,7 +256,7 @@ class BuddingLayer(nn.Linear):
         current_weights = self.state_dict()['weight']
 
         for epoch_id, cached_weights in enumerate(self.weights_window):
-            dist_func = torch.sum(current_weights, dim=1) - torch.sum(cached_weights, dim=1)
+            dist_func = torch.sum(current_weights - cached_weights, dim=1)
             dist_points = self.window_size - epoch_id
 
             self.lipshitz_constants.append(dist_func / dist_points)

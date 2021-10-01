@@ -13,6 +13,7 @@ def get_activation(activation: str):
 
     activations = {
         'relu': nn.ReLU,
+        'leaky-relu': nn.LeakyReLU,
         'sigmoid': nn.Sigmoid,
         'tanh': nn.Tanh,
         'softmax': nn.Softmax
@@ -45,7 +46,7 @@ def get_metrics_dict(metric_list: Tuple[str], metric_settings):
 
     classification_metrics = {
         'accuracy': torchmetrics.Accuracy,
-        'average_precision': torchmetrics.AveragePrecision,
+        'average-precision': torchmetrics.AveragePrecision,
         'f1': torchmetrics.F1,
         'precision': torchmetrics.Precision,
         'recall': torchmetrics.Recall,
