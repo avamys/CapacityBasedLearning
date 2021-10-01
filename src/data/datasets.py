@@ -111,7 +111,7 @@ class DatasetGenerator():
 
         for cat_idx in range(n_categorical):
             col = -1 - n_binary - cat_idx
-            X[:, col] = np.digitize(X[:, col], get_categorical_sep(X[:, col], 3)) - 1
+            X[:, col] = np.digitize(X[:, col], get_categorical_sep(X[:, col], 6)) - 1
 
         return Dataset(X, y)
 
@@ -124,11 +124,15 @@ class DatasetGenerator():
             given folder 
         '''
         values = get_range(range_min, range_max, dist)
-        params = self.base
+        params = self.base.copy()
         feature_id = self.ids[feature]
 
         for value in values:
-            params[feature] = value
+            value = round(value, 2) if isinstance(value, float) else value
+            if feature == 'weights':
+                params[feature] = [value]
+            else:
+                params[feature] = value
             ds = self.generate_dataset(**params)
             to_file = folder+f'/K0_F{feature_id}_{value}.csv'
             ds.save(to_file)
