@@ -1,0 +1,36 @@
+name: experiment-tuning
+dir: runs
+
+training:
+  test_size: 0.3
+  epochs: 50
+  criterion: 'cross-entropy'
+  metrics: ['accuracy', 'f1', 'precision', 'recall']
+
+parameters:
+  optimizer: 'adam'
+  learning_rate: 0.01
+  batch_size: 64
+
+# Model parameters
+  model_params:
+    layers: [10, 10]
+    activation_name: 'relu'
+    window_size: 5
+    threshold: 0.003
+
+# Buds parameters
+    buds_params:
+      learning_rate: 0.1
+      size_in: 3
+      threshold: 0.003
+      decline: 1.0
+      layers: [3, 3]
+      activation: 'relu'
+
+# Ray experiment keyword arguments
+kwargs:
+  time_budget_s: 7200
+  resources_per_trial:
+    cpu: 4
+  num_samples: 20

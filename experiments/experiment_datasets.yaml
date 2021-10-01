@@ -1,0 +1,79 @@
+name: exp-datasets
+dir: runs
+
+training:
+  test_size: 0.3
+  epochs: 50
+  criterion: 'cross-entropy'
+  metrics: ['accuracy', 'f1', 'precision', 'recall']
+
+parameters:
+  optimizer: 'adam'
+  learning_rate: 0.01
+  batch_size: 64
+
+# Model parameters
+  model_params:
+    layers: [
+      10,
+      10
+    ]
+    activation_name: 'relu'
+    window_size: 5
+    threshold: 0.003
+
+# Buds parameters
+    buds_params:
+      learning_rate: 0.01
+      size_in: 3
+      threshold: 0.003
+      decline: 1.0
+      layers: [3, 3]
+      activation: 'relu'
+
+# Base dataset parameters
+base_dataset:
+  n_samples: 7000
+  n_numerical: 10
+  n_categorical: 5 
+  n_binary: 5
+  noise: 0.05
+  n_classes: 2
+
+# Datasets parameters
+datasets:
+  n_numerical: 
+    min: 0
+    max: 80
+    dist: 5
+  n_categorical:
+    min: 0
+    max: 80
+    dist: 5
+  n_binary:
+    min: 0
+    max: 80
+    dist: 5
+  noise:
+    min: 0.0
+    max: 0.9
+    dist: 0.05
+  n_classes:
+    min: 2
+    max: 30
+    dist: 2
+  class_sep:
+    min: 0.0
+    max: 5.0
+    dist: 0.5
+  weights:
+    min: 0.5
+    max: 0.99
+    dist: 0.05
+
+# Ray experiment keyword arguments
+kwargs:
+  time_budget_s: 7200
+  resources_per_trial:
+    cpu: 4
+  num_samples: 10
