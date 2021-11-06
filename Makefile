@@ -32,41 +32,23 @@ requirements: test_environment
 	$(PYTHON_INTERPRETER) -m pip install -r requirements.txt
 
 ## Make Dataset
-data: requirements
-	@echo ">>> Downloading data from UCI."
-	curl -o data/raw/obesity.zip $(UCI_DATA_URL_OBESITY)
-	unzip data/raw/obesity.zip -d data/raw/
-	find data/raw/ -type f ! -iname "*.csv" -delete
-	mv data/raw/* data/raw/obesity.csv
-	curl -o data/raw/mice.xls $(UCI_DATA_URL_MICE)
-	curl -o data/raw/adult.data $(UCI_DATA_URL_ADULT)
-	curl -o data/raw/anneal.data $(UCI_DATA_URL_ANNEALING)
-	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/adult.data data/processed/
-	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/obesity.csv data/processed/
-	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/mice.xls data/processed/
-	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/anneal.data data/processed/
-
-## Make single dataset
-get_dataset:
+data:
 	@echo ">>> Downloading data from UCI."
 	$(PYTHON_INTERPRETER) src/data/make_dataset.py extreme data/raw data/processed/
-
-## Data preprocessing
-preprocessing: 
-	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/adult.data data/processed/
-	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/obesity.csv data/processed/
-	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/mice.xls data/processed/
-	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw/anneal.data data/processed/
+	$(PYTHON_INTERPRETER) src/data/make_dataset.py multiclass data/raw data/processed/
+	$(PYTHON_INTERPRETER) src/data/make_dataset.py binary data/raw data/processed/
 	
 ## Train Model
 train:
 	@echo ">>> Training model"
-	$(PYTHON_INTERPRETER) src/models/train_model.py data/processed/extreme.csv experiments/experiment_test.yaml
+	$(PYTHON_INTERPRETER) src/models/train_model.py experiments/experiment_tuning.yaml -i data/processed/extreme.csv -b -p experiment-extreme-7
+	$(PYTHON_INTERPRETER) src/models/train_model.py experiments/experiment_tuning.yaml -i data/processed/multiclass.csv -b -p experiment-multiclass-7
+	$(PYTHON_INTERPRETER) src/models/train_model.py experiments/experiment_tuning.yaml -i data/processed/binary.csv -b -p experiment-binary-7
 
 ## Train with data generation
 tune:
 	@echo ">>> Training model with data generation"
-	$(PYTHON_INTERPRETER) src/models/tune_model.py experiments/experiment_test.yaml -all -b
+	$(PYTHON_INTERPRETER) src/models/train_model.py experiments/experiment_datasets_balanced.yaml -g -b -p capacity-datasets-experiment
 
 ## Run tests
 run_tests:

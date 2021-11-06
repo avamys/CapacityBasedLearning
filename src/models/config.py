@@ -47,7 +47,6 @@ class Configurator():
         self.enable_wandb = enable_wandb
         self.verbosity = verbosity
         self.model_init_params = []
-        ray.init(include_dashboard=False, configure_logging=False, object_store_memory=10**9)
 
     def _save_init_params(self, model: torch.nn.Module):
         self.model_init_params = []
@@ -82,7 +81,7 @@ class Configurator():
 
         # Initialize metrics modules
         metric_kwargs = {'num_classes': self.trainset.targets,
-                         'average': 'weighted',
+                         'average': 'macro',
                          'compute_on_step': False}
         train_metrics, test_metrics = get_metrics_dict(self.metrics, metric_kwargs)
 
